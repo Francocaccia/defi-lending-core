@@ -11,6 +11,7 @@ import {InterestRateModel} from "./libraries/InterestRateModel.sol";
 import {SharesMath} from "./libraries/SharesMath.sol";
 import {BorrowMath} from "./libraries/BorrowMath.sol";
 import {RiskMath} from "./libraries/RiskMath.sol";
+import {MarketMath} from "./libraries/MarketMath.sol";
 import {RAY, WAD} from "./libraries/Units.sol";
 
 /// @title LendingMarket
@@ -224,12 +225,9 @@ contract LendingMarket is ReentrancyGuard {
         view
         returns (uint256 newIndex, uint256 interest)
     {
-        uint256 oldDebt = BorrowMath.debtFromScaled(totalScaledDebt, borrowIndex);
-        uint256 u = InterestRateModel.utilization(totalSupplyAssets, oldDebt);
-        uint256 ratePerSecond = InterestRateModel.borrowRatePerSecond(_rateParams(), u);
-
-        newIndex = BorrowMath.accrueIndex(borrowIndex, ratePerSecond, elapsed);
-        interest = BorrowMath.debtFromScaled(totalScaledDebt, newIndex) - oldDebt;
+        return MarketMath.accrue(
+            totalScaledDebt, totalSupplyAssets, borrowIndex, elapsed, _rateParams()
+        );
     }
 
     /// @dev Borrow index as it would be if accrued right now (for views).
@@ -410,18 +408,13 @@ contract LendingMarket is ReentrancyGuard {
         uint256 scaled = scaledDebt[borrower];
         if (scaled == 0) revert Market__NoDebt(borrower);
 
-        uint256 debt = BorrowMath.debtFromScaled(scaled, borrowIndex);
         uint256 burned;
-        if (assets >= debt) {
-            repaid = debt;
-            burned = scaled;
-        } else {
-            repaid = assets;
-            burned = BorrowMath.scaledFromAssetsDown(assets, borrowIndex);
-            // Slither incorrect-equality: zero-check of a computed burn amount (docs/SLITHER_TRIAGE.md).
-            // slither-disable-next-line incorrect-equality
-            if (burned == 0) revert Market__RepayTooSmall();
-        }
+        (repaid, burned) = MarketMath.repayAmounts(assets, scaled, borrowIndex);
+        // A full repayment burns all (non-zero) scaled debt, so zero here means a tiny partial
+        // repayment. Slither incorrect-equality: zero-check of a computed burn amount
+        // (docs/SLITHER_TRIAGE.md).
+        // slither-disable-next-line incorrect-equality
+        if (burned == 0) revert Market__RepayTooSmall();
 
         scaledDebt[borrower] = scaled - burned;
         totalScaledDebt -= burned;
@@ -470,10 +463,21 @@ contract LendingMarket is ReentrancyGuard {
             if (hf >= WAD) revert Market__PositionHealthy(hf);
         }
 
-        (repaid, seized) =
-            _liquidationAmounts(debt, maxRepay, collateralOf[borrower], collPrice, debtPrice);
-        uint256 burned =
-            repaid >= debt ? scaled : BorrowMath.scaledFromAssetsDown(repaid, borrowIndex);
+        uint256 burned;
+        (repaid, seized, burned) = MarketMath.liquidationAmounts(
+            scaled,
+            borrowIndex,
+            maxRepay,
+            collateralOf[borrower],
+            MarketMath.LiquidationParams({
+                collPrice: collPrice,
+                debtPrice: debtPrice,
+                collDecimals: COLLATERAL_DECIMALS,
+                debtDecimals: BORROW_DECIMALS,
+                bonus: LIQUIDATION_BONUS,
+                closeFactor: CLOSE_FACTOR
+            })
+        );
         // A repayment too small to burn any scaled debt is pointless and reverts, EXCEPT when it
         // seizes ALL remaining collateral: then the leftover debt is written off right below.
         // Without this exception, an extreme price collapse (collateral worth < ~1 unit of the
@@ -506,51 +510,19 @@ contract LendingMarket is ReentrancyGuard {
         COLLATERAL_TOKEN.safeTransfer(msg.sender, seized);
     }
 
-    /// @dev Amounts for one liquidation, see `liquidate`.
-    function _liquidationAmounts(
-        uint256 debt,
-        uint256 requested,
-        uint256 collateral,
-        uint256 collPrice,
-        uint256 debtPrice
-    ) internal view returns (uint256 repaid, uint256 seized) {
-        repaid = RiskMath.maxRepayable(debt, CLOSE_FACTOR);
-        if (requested < repaid) repaid = requested;
-
-        seized = RiskMath.seizeForRepay(
-            repaid, debtPrice, BORROW_DECIMALS, collPrice, COLLATERAL_DECIMALS, LIQUIDATION_BONUS
-        );
-        if (seized > collateral) {
-            seized = collateral;
-            uint256 forSeize = RiskMath.repayForSeize(
-                collateral,
-                debtPrice,
-                BORROW_DECIMALS,
-                collPrice,
-                COLLATERAL_DECIMALS,
-                LIQUIDATION_BONUS
-            );
-            // Rounding up can overshoot by <= 1 unit; never charge more than was asked/allowed.
-            if (forSeize < repaid) repaid = forSeize;
-        }
-    }
-
     /// @dev Remove `borrower`'s remaining debt. The supplier loss is the DROP in derived total debt
     ///      (not the borrower's own ceil'd debt), which keeps `supply <= cash + debt` exact.
     function _writeOffBadDebt(address borrower) internal {
         uint256 scaled = scaledDebt[borrower];
-        uint256 index = borrowIndex;
-        uint256 debtBefore = BorrowMath.debtFromScaled(totalScaledDebt, index);
+        (uint256 debtWrittenOff, uint256 loss, uint256 newSupplyAssets) =
+            MarketMath.badDebt(totalScaledDebt, scaled, borrowIndex, totalSupplyAssets);
 
         scaledDebt[borrower] = 0;
         totalScaledDebt -= scaled;
-
-        uint256 loss = debtBefore - BorrowMath.debtFromScaled(totalScaledDebt, index);
-        // Saturate instead of reverting: a revert here would make liquidation impossible forever.
-        totalSupplyAssets = loss >= totalSupplyAssets ? 0 : totalSupplyAssets - loss;
+        totalSupplyAssets = newSupplyAssets;
         totalBadDebt += loss;
 
-        emit BadDebtRecorded(borrower, BorrowMath.debtFromScaled(scaled, index), loss);
+        emit BadDebtRecorded(borrower, debtWrittenOff, loss);
     }
 
     /*//////////////////////////////////////////////////////////////
