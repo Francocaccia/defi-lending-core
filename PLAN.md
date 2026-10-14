@@ -59,10 +59,9 @@ model. Quality over feature count. Educational only: never real funds, never mai
 - Delivered: `reference-model/` (CMake, C++17, hand-written exact 256-bit math with a 512-bit
   `mulDiv`, no third-party dependency), C++ unit + CLI + vector tests, CI building the model before
   `forge test`, `docs/DIFFERENTIAL_REPORT.md`, README "Reference model".
-- Result: 0 mismatches (details and the evidence in `docs/DIFFERENTIAL_REPORT.md`).
+- Result: 0 mismatches (details and the evidence in `docs/DIFFERENTIAL_REPORT.md`). CI is green
+  on `main`: model built with GCC and MSVC, 11/11 C++ tests, differential suite 29/29.
 - Pending / deferred from M8:
-  - The CI jobs (Ubuntu GCC, Windows MSVC) were written but could not be run before the push; the
-    model was built and tested locally with MSVC only (no GCC/Clang available on the dev machine).
   - The fuzz distribution almost never produces VALID `validateRiskParams` inputs (about 1%); that
     success path is covered by the 30 successful vectors, not by the fuzzer.
   - Optional: swap the hand-written test harness for Catch2 and/or the big-integer type for

@@ -41,6 +41,7 @@ Solidity vs C++ (`FOUNDRY_PROFILE=diff forge test --match-path "test/differentia
 |---|---|---|---|
 | 1 | default | 29 passed, 0 failed, 0 skipped (28 differential + `VectorsTest`) | 832 s |
 | 2 | `--fuzz-seed 0x4d38` | 29 passed, 0 failed, 0 skipped | 1,644 s |
+| CI (Ubuntu) | default | 29 passed, 0 failed, 0 skipped | 19.5 s |
 
 Each of the 25 functions is fuzzed with `runs = 1000` (profile `diff`) and, per run, half of the
 inputs are bounded to realistic ranges and half are raw 256-bit values (the `wide` flag of
@@ -121,12 +122,12 @@ CLI (a throw-away script, not in the repo): 3,000 random cases of `healthFactor`
   security suites. The differential tests only see the pure functions behind `DiffHarness`.
 - **Random testing is not proof.** 50,000 comparisons plus 1,139 vectors make a disagreement in
   the covered functions unlikely, they do not rule one out.
-- **One compiler tried locally.** The model was built and tested with MSVC 14.41. GCC (Ubuntu CI)
-  and MSVC (Windows CI) builds are configured in `.github/workflows/ci.yml`; no GCC or Clang was
-  available on the development machine to try beforehand.
-- **Performance.** A comparison costs one process spawn (~50 ms); a full 25,000-comparison run
-  takes 14 to 27 minutes on this machine, which is why CI runs the profile once, not per commit
-  in a matrix.
+- **Compilers.** Locally the model was built and tested with MSVC 14.41 only (no GCC or Clang on
+  the development machine). The first CI run on `main` (GitHub Actions) then built and tested it
+  with GCC on `ubuntu-latest` and MSVC on `windows-latest` (11/11 tests each, no change needed) and
+  ran the whole differential suite there: 29 passed, 0 failed, 0 skipped, in 19.5 s.
+- **Performance.** A comparison costs one process spawn: ~50 ms on this Windows machine (a full
+  25,000-comparison run takes 14 to 27 minutes), but under 1 ms on the Linux CI runner.
 
 ## 7. DESIGN.md ambiguities hit
 
