@@ -440,3 +440,34 @@ Operand note (R1/R4): ALL of `WAD + bonus`, `repay * (WAD + bonus)`, `10**cd`, `
 Note the argument order of `liquidationAmounts`: collateral price `cp` comes BEFORE debt price `dp`,
 and collateral decimals `cd` before debt decimals `dd` (unlike `seizeForRepay`/`repayForSeize`,
 which take the debt asset first). This asymmetry is deliberate and fixed.
+
+### 9.8 Clarifications found while implementing the reference model (M8)
+
+The C++ model was written from sections 0-9 only. Reading them as a stranger, these points were
+not stated explicitly. None of them turned out to be a disagreement with the Solidity; they are
+now written down so the next reader does not have to guess (details in
+`docs/DIFFERENTIAL_REPORT.md`).
+
+- **`annualBorrowRate`, `WAD - optimal`.** The subtraction is only evaluated in the `u > optimal`
+  branch. Since `u <= WAD` is checked first, that branch implies `optimal < WAD`, so
+  `WAD - optimal` can never underflow in practice: the remark "fails if `optimal > WAD`" describes
+  a case that is unreachable. With `optimal > WAD` the `u <= optimal` branch is always taken.
+- **`validateRiskParams` and `validateRateParams` check order.** The listed conditions are a
+  plain "any of these fails" disjunction. Whether a product such as
+  `liquidationThreshold * (WAD + bonus)` overflows is therefore irrelevant on its own: an overflow
+  is also a failure, so the result is "fails" either way. The order of the checks is unobservable.
+- **`liquidationAmounts` with `requested == 0`** succeeds and returns `[0, 0, 0]` (no failure, no
+  special case): `repaid = 0`, `seized = seizeForRepay(0, ...) = 0`, `burned = mulDiv(0, RAY, index)`.
+  The "nothing to liquidate" revert of section 7.3 belongs to the market, not to this pure function.
+- **`liquidationAmounts` with `collateral == 0`** and a positive `seized` takes the cap branch:
+  `seized = 0` and `repaid = min(repaid, repayForSeize(0, ...)) = 0`.
+- **`repayAmounts` with `index == 0`**: `debt = debtFromScaled(scaled, 0) = 0`, so
+  `assets >= debt` holds and the result is `[0, scaled]`; `scaledFromAssetsDown` (which would divide
+  by zero) is never evaluated.
+- **Decimals arguments.** `decimals`, `dd`, `cd` are `uint8` in the Solidity, so the command-line
+  model rejects values above 255 as a usage error (exit 2, the Solidity call could not even be
+  made). `10**d` for `78 <= d <= 255` is a model failure (exit 1, R3).
+- **Reachability of large decimals in the liquidation formulas.** `seizeForRepay` /
+  `repayForSeize` also multiply the power of ten by `WAD` and a price, so they already fail for
+  `10**d * WAD * price` at much smaller `d` than 78 (with price 1: `d >= 60`). R1 explains it; it is
+  not a separate rule.
