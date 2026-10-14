@@ -344,10 +344,99 @@ A stale or invalid oracle therefore freezes exactly the actions that extend cred
 collateral against a price; deposits, repayments, supplier exits and debt-free collateral exits
 keep working.
 
-## 9. Pure function catalogue (for the differential tests) [to be finalized in M7]
-The functions below are pure, take all inputs explicitly and are the candidates for the CLI of the
-reference model (exact names, argument order and encoding are fixed in `docs/M8_HANDOFF.md`):
-`utilization`, `annualBorrowRate`, `borrowRatePerSecond`, `accrueIndex`, `scaledFromAssetsUp`,
-`scaledFromAssetsDown`, `debtFromScaled`, `toSharesDown`, `toSharesUp`, `toAssetsDown`,
-`toAssetsUp`, `collateralValueUsd`, `debtValueUsd`, `healthFactor`, `maxDebtValue`,
-`maxRepayable`, `seizeForRepay`, `repayForSeize`.
+## 9. Function catalogue for the reference model [implemented]
+
+Every function below is a PURE function of its arguments (no storage, no time, no oracle). The
+reference model implements exactly these, with the same name and the same argument order, and must
+behave identically: same outputs when the Solidity succeeds, a failure exactly when the Solidity
+reverts. The command-line encoding is in `docs/M8_HANDOFF.md`; this section is the semantics.
+
+### 9.1 Evaluation rules (they decide WHEN a function fails)
+
+- **R1 Checked arithmetic.** Every `+`, `-`, `*` on 256-bit unsigned integers fails if the exact
+  result is outside `[0, 2^256 - 1]`. This applies to every sub-expression that is evaluated,
+  including products used as `mulDiv` operands or denominators.
+- **R2 `mulDiv(a, b, d)`** = `floor(a*b/d)` using a 512-bit intermediate. Fails if `d == 0` or if the
+  quotient does not fit in 256 bits. **`mulDivUp(a, b, d)`** = `mulDiv(a, b, d)` plus 1 when
+  `a*b mod d != 0`; it fails in the same cases and also if that `+1` overflows.
+- **R3 Powers of ten.** `10**d` (`d` = a token-decimals argument, `0..255`) is computed as a checked
+  256-bit power: it fails for `d >= 78` (`10^77 < 2^256 < 10^78`).
+- **R4 Eager operands, lazy branches.** All operands of an expression and all arguments of a call
+  are evaluated (and may fail) before the operation runs, even if the final value would not depend
+  on them. In an `if / else` or a `? :` ONLY the taken branch is evaluated. Where a function lists
+  steps in order, steps are evaluated in that order; since every failure is the same failure, only
+  *whether* something fails matters, never which step fails first.
+- **R5 Products are left-associative**: `a * b * c` means `(a * b) * c` (matters only for whether an
+  intermediate overflows).
+- **R6 Constants**: `WAD = 10^18`, `RAY = 10^27`, `WAD_TO_RAY = 10^9`, `SECONDS_PER_YEAR = 31_536_000`,
+  `VIRTUAL_SHARES = 10^6`, `VIRTUAL_ASSETS = 1`, `MAX_ANNUAL_RATE = 10 * WAD`,
+  `MAX_LIQUIDATION_BONUS = 25 * 10^16` (0.25 WAD), `UINT_MAX = 2^256 - 1`.
+- **R7 Rate-model and risk-parameter arguments are NOT validated** by the functions that use them
+  (only `validateRateParams` / `validateRiskParams` validate). Invalid parameters therefore flow
+  through the arithmetic and fail only where rules R1-R2 say so.
+
+### 9.2 Interest rate model
+
+| Function (arguments in order) | Returns | Definition |
+|---|---|---|
+| `utilization(supply, borrows)` | `[u]` | `supply == 0` -> 0; `borrows >= supply` -> WAD; else `mulDiv(borrows, WAD, supply)`. Never fails. |
+| `validateRateParams(base, slope1, slope2, optimal)` | `[1]` | Fails if `optimal == 0` or `optimal >= WAD`; fails if any of `base`, `slope1`, `slope2` is `> MAX_ANNUAL_RATE`. Otherwise returns 1. |
+| `annualBorrowRate(base, slope1, slope2, optimal, u)` | `[rate]` | Fails if `u > WAD`. If `u <= optimal`: `base + mulDiv(slope1, u, optimal)`. Else: `base + slope1 + mulDiv(slope2, u - optimal, WAD - optimal)` (the subtraction `WAD - optimal` fails if `optimal > WAD`). |
+| `borrowRatePerSecond(base, slope1, slope2, optimal, u)` | `[r]` | `annual = annualBorrowRate(...)` (same failures), then `(annual * WAD_TO_RAY) / SECONDS_PER_YEAR` with plain floor division. |
+
+### 9.3 Borrow index and scaled debt
+
+| Function | Returns | Definition |
+|---|---|---|
+| `accrueIndex(index, ratePerSecond, dt)` | `[newIndex]` | `t = ratePerSecond * dt`; `index + mulDivUp(index, t, RAY)`. |
+| `scaledFromAssetsUp(assets, index)` | `[s]` | `mulDivUp(assets, RAY, index)` (fails if `index == 0`). |
+| `scaledFromAssetsDown(assets, index)` | `[s]` | `mulDiv(assets, RAY, index)`. |
+| `debtFromScaled(scaled, index)` | `[d]` | `mulDivUp(scaled, index, RAY)`. |
+
+### 9.4 Supplier shares
+
+| Function | Returns | Definition |
+|---|---|---|
+| `toSharesDown(assets, totalAssets, totalShares)` | `[x]` | `mulDiv(assets, totalShares + VIRTUAL_SHARES, totalAssets + VIRTUAL_ASSETS)` |
+| `toSharesUp(assets, totalAssets, totalShares)` | `[x]` | `mulDivUp(` same operands `)` |
+| `toAssetsDown(shares, totalAssets, totalShares)` | `[x]` | `mulDiv(shares, totalAssets + VIRTUAL_ASSETS, totalShares + VIRTUAL_SHARES)` |
+| `toAssetsUp(shares, totalAssets, totalShares)` | `[x]` | `mulDivUp(` same operands `)` |
+
+The `+ VIRTUAL_*` additions are checked (R1): `totalShares = UINT_MAX` fails.
+
+### 9.5 Valuation, health factor, limits
+
+| Function | Returns | Definition |
+|---|---|---|
+| `collateralValueUsd(amount, priceWad, decimals)` | `[v]` | `mulDiv(amount, priceWad, 10**decimals)` |
+| `debtValueUsd(amount, priceWad, decimals)` | `[v]` | `mulDivUp(amount, priceWad, 10**decimals)` |
+| `healthFactor(collateralValue, debtValue, liquidationThreshold)` | `[hf]` | `debtValue == 0` -> UINT_MAX; else `mulDiv(collateralValue, liquidationThreshold, debtValue)` |
+| `maxDebtValue(collateralValue, maxLtv)` | `[v]` | `mulDiv(collateralValue, maxLtv, WAD)` |
+| `isWithinMaxLtv(collateralValue, debtValue, maxLtv)` | `[0 or 1]` | `1` if `debtValue <= maxDebtValue(collateralValue, maxLtv)` else `0` (fails if `maxDebtValue` fails) |
+| `maxRepayable(debt, closeFactor)` | `[v]` | `mulDivUp(debt, closeFactor, WAD)` |
+| `validateRiskParams(maxLtv, liquidationThreshold, bonus, closeFactor)` | `[1]` | Fails if any of: `maxLtv == 0`; `maxLtv >= liquidationThreshold`; `liquidationThreshold >= WAD`; `bonus == 0`; `bonus > MAX_LIQUIDATION_BONUS`; `liquidationThreshold * (WAD + bonus) >= WAD * WAD`; `closeFactor == 0`; `closeFactor > WAD`. Otherwise returns 1. |
+
+### 9.6 Liquidation formulas
+
+`dd`/`cd` are the borrow-/collateral-token decimals, `dp`/`cp` the borrow-/collateral-asset prices.
+
+| Function | Returns | Definition |
+|---|---|---|
+| `seizeForRepay(repay, dp, dd, cp, cd, bonus)` | `[s]` | `mulDiv(repay * (WAD + bonus), dp * 10**cd, cp * 10**dd * WAD)` |
+| `repayForSeize(seize, dp, dd, cp, cd, bonus)` | `[r]` | `mulDivUp(seize, cp * 10**dd * WAD, dp * (WAD + bonus) * 10**cd)` |
+
+Operand note (R1/R4): ALL of `WAD + bonus`, `repay * (WAD + bonus)`, `10**cd`, `dp * 10**cd`,
+`10**dd`, `cp * 10**dd`, `(cp * 10**dd) * WAD` are computed before `mulDiv` runs.
+
+### 9.7 Market kernels (composite procedures)
+
+| Function (arguments in order) | Returns | Definition |
+|---|---|---|
+| `accrue(totalScaledDebt, totalSupplyAssets, borrowIndex, elapsed, base, slope1, slope2, optimal)` | `[newIndex, interest]` | `oldDebt = debtFromScaled(totalScaledDebt, borrowIndex)`; `u = utilization(totalSupplyAssets, oldDebt)`; `r = borrowRatePerSecond(base, slope1, slope2, optimal, u)`; `newIndex = accrueIndex(borrowIndex, r, elapsed)`; `interest = debtFromScaled(totalScaledDebt, newIndex) - oldDebt` (checked subtraction). |
+| `repayAmounts(assets, scaled, index)` | `[repaid, burned]` | `debt = debtFromScaled(scaled, index)`; if `assets >= debt`: `[debt, scaled]`; else `[assets, scaledFromAssetsDown(assets, index)]`. |
+| `liquidationAmounts(scaled, index, requested, collateral, cp, dp, cd, dd, bonus, closeFactor)` | `[repaid, seized, burned]` | `debt = debtFromScaled(scaled, index)`; `repaid = maxRepayable(debt, closeFactor)`; if `requested < repaid`: `repaid = requested`; `seized = seizeForRepay(repaid, dp, dd, cp, cd, bonus)`; if `seized > collateral`: `seized = collateral` and `forSeize = repayForSeize(collateral, dp, dd, cp, cd, bonus)`, then if `forSeize < repaid`: `repaid = forSeize`; finally `burned = (repaid >= debt) ? scaled : scaledFromAssetsDown(repaid, index)`. |
+| `badDebt(totalScaledDebt, borrowerScaled, index, totalSupplyAssets)` | `[debtWrittenOff, loss, newTotalSupplyAssets]` | `debtBefore = debtFromScaled(totalScaledDebt, index)`; `debtAfter = debtFromScaled(totalScaledDebt - borrowerScaled, index)` (checked subtraction); `debtWrittenOff = debtFromScaled(borrowerScaled, index)`; `loss = debtBefore - debtAfter`; `newTotalSupplyAssets = (loss >= totalSupplyAssets) ? 0 : totalSupplyAssets - loss`. |
+
+Note the argument order of `liquidationAmounts`: collateral price `cp` comes BEFORE debt price `dp`,
+and collateral decimals `cd` before debt decimals `dd` (unlike `seizeForRepay`/`repayForSeize`,
+which take the debt asset first). This asymmetry is deliberate and fixed.

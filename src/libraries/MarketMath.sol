@@ -107,7 +107,10 @@ library MarketMath {
             uint256 forSeize = RiskMath.repayForSeize(
                 collateral, p.debtPrice, p.debtDecimals, p.collPrice, p.collDecimals, p.bonus
             );
-            // Rounding up can overshoot by <= 1 unit; never charge more than was asked/allowed.
+            // `seizeForRepay` and `repayForSeize` are exact inverses, and seized > collateral means
+            // repaid > collateral / rate, so ceil(collateral / rate) = forSeize <= repaid ALWAYS.
+            // The min is therefore purely defensive: it guarantees the liquidator is never charged
+            // more than was asked/allowed even if the two formulas were ever edited apart.
             if (forSeize < repaid) repaid = forSeize;
         }
 
