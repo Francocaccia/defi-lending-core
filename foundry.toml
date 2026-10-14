@@ -1,0 +1,53 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+cache_path = "cache"
+
+# Exact compiler pin: reproducible builds and bytecode. Bump deliberately, never implicitly.
+solc_version = "0.8.28"
+evm_version = "cancun"
+auto_detect_solc = false
+optimizer = true
+optimizer_runs = 200
+
+# ffi is OFF by default so a plain `forge test` can never execute an external
+# command (e.g. from a dependency's test code). The differential tests (M8) run
+# under `FOUNDRY_PROFILE=diff`, which is the only profile that enables it.
+ffi = false
+
+# Tests may only write the gas/coverage artefacts they need; no blanket access.
+fs_permissions = []
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 256
+depth = 64
+# Reverts inside handlers are filtered with explicit bounds/guards instead of
+# being swallowed, so a revert in a handler is a real finding.
+fail_on_revert = true
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+quote_style = "double"
+number_underscore = "thousands"
+
+# More fuzz/invariant iterations for CI.
+[profile.ci]
+fuzz = { runs = 1000 }
+invariant = { runs = 256, depth = 128, fail_on_revert = true }
+
+# Differential tests against the C++ reference model (M8). Only this profile
+# enables `vm.ffi`. Safe because the tests call exactly one fixed binary
+# (reference-model/build/refmodel), built from this repo, with numeric args
+# only: no shell, no network, no user-controlled path.
+[profile.diff]
+ffi = true
+fuzz = { runs = 1000 }
