@@ -145,6 +145,8 @@ contract ChainlinkOracle is IOracle {
         view
         returns (uint80 roundId, int256 answer, uint256 updatedAt, uint80 answeredInRound)
     {
+        // Slither unused-return: `startedAt` is intentionally not read (see the @dev above).
+        // slither-disable-next-line unused-return
         try FEED.latestRoundData() returns (uint80 r, int256 a, uint256, uint256 u, uint80 air) {
             return (r, a, u, air);
         } catch {

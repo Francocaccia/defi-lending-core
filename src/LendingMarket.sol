@@ -203,8 +203,12 @@ contract LendingMarket is ReentrancyGuard {
         // Interest is a function of elapsed wall-clock time: using block.timestamp is the point.
         // forge-lint: disable-next-line(block-timestamp)
         uint256 elapsed = block.timestamp - lastAccrual;
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         // forge-lint: disable-next-line(block-timestamp)
         if (elapsed == 0) return;
+        // slither-disable-end incorrect-equality
 
         (uint256 newIndex, uint256 interest) = _previewAccrual(elapsed);
         lastAccrual = block.timestamp;
@@ -232,8 +236,12 @@ contract LendingMarket is ReentrancyGuard {
     function _currentIndex() internal view returns (uint256 index, uint256 pendingInterest) {
         // forge-lint: disable-next-line(block-timestamp)
         uint256 elapsed = block.timestamp - lastAccrual;
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         // forge-lint: disable-next-line(block-timestamp)
         if (elapsed == 0) return (borrowIndex, 0);
+        // slither-disable-end incorrect-equality
         return _previewAccrual(elapsed);
     }
 
@@ -260,7 +268,11 @@ contract LendingMarket is ReentrancyGuard {
         _accrue();
 
         shares = SharesMath.toSharesDown(assets, totalSupplyAssets, totalSupplyShares);
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         if (shares == 0) revert Market__ZeroShares();
+        // slither-disable-end incorrect-equality
 
         totalSupplyAssets += assets;
         totalSupplyShares += shares;
@@ -292,7 +304,11 @@ contract LendingMarket is ReentrancyGuard {
         _accrue();
 
         assets = SharesMath.toAssetsDown(shares, totalSupplyAssets, totalSupplyShares);
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         if (assets == 0) revert Market__ZeroAmount();
+        // slither-disable-end incorrect-equality
         _withdraw(assets, shares);
     }
 
@@ -402,6 +418,8 @@ contract LendingMarket is ReentrancyGuard {
         } else {
             repaid = assets;
             burned = BorrowMath.scaledFromAssetsDown(assets, borrowIndex);
+            // Slither incorrect-equality: zero-check of a computed burn amount (docs/SLITHER_TRIAGE.md).
+            // slither-disable-next-line incorrect-equality
             if (burned == 0) revert Market__RepayTooSmall();
         }
 
@@ -461,10 +479,14 @@ contract LendingMarket is ReentrancyGuard {
         // Without this exception, an extreme price collapse (collateral worth < ~1 unit of the
         // borrow asset against large debt) would make the position impossible to liquidate, and
         // its bad debt could never be cleared.
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         bool takesAllCollateral = seized == collateralOf[borrower];
         if (repaid == 0 || seized == 0 || (burned == 0 && !takesAllCollateral)) {
             revert Market__NothingToLiquidate();
         }
+        // slither-disable-end incorrect-equality
 
         scaledDebt[borrower] = scaled - burned;
         totalScaledDebt -= burned;
@@ -474,7 +496,11 @@ contract LendingMarket is ReentrancyGuard {
         emit Liquidate(msg.sender, borrower, repaid, seized);
 
         // Insolvent leftover: debt remains but there is nothing left to seize.
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         if (collateralOf[borrower] == 0 && scaledDebt[borrower] != 0) _writeOffBadDebt(borrower);
+        // slither-disable-end incorrect-equality
 
         BORROW_TOKEN.safeTransferFrom(msg.sender, address(this), repaid);
         COLLATERAL_TOKEN.safeTransfer(msg.sender, seized);
@@ -592,7 +618,11 @@ contract LendingMarket is ReentrancyGuard {
     /// @dev Reverts if an oracle price is unusable, so it can never report a stale-based number.
     function healthFactor(address account) external view returns (uint256) {
         uint256 scaled = scaledDebt[account];
+        // Slither incorrect-equality: a zero-check on a value DERIVED from internal accounting
+        // (not an ether/token balance an attacker can nudge), see docs/SLITHER_TRIAGE.md.
+        // slither-disable-start incorrect-equality
         if (scaled == 0) return type(uint256).max;
+        // slither-disable-end incorrect-equality
         (uint256 index,) = _currentIndex();
 
         uint256 collValue = RiskMath.collateralValueUsd(
