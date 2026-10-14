@@ -456,7 +456,15 @@ contract LendingMarket is ReentrancyGuard {
             _liquidationAmounts(debt, maxRepay, collateralOf[borrower], collPrice, debtPrice);
         uint256 burned =
             repaid >= debt ? scaled : BorrowMath.scaledFromAssetsDown(repaid, borrowIndex);
-        if (repaid == 0 || seized == 0 || burned == 0) revert Market__NothingToLiquidate();
+        // A repayment too small to burn any scaled debt is pointless and reverts, EXCEPT when it
+        // seizes ALL remaining collateral: then the leftover debt is written off right below.
+        // Without this exception, an extreme price collapse (collateral worth < ~1 unit of the
+        // borrow asset against large debt) would make the position impossible to liquidate, and
+        // its bad debt could never be cleared.
+        bool takesAllCollateral = seized == collateralOf[borrower];
+        if (repaid == 0 || seized == 0 || (burned == 0 && !takesAllCollateral)) {
+            revert Market__NothingToLiquidate();
+        }
 
         scaledDebt[borrower] = scaled - burned;
         totalScaledDebt -= burned;

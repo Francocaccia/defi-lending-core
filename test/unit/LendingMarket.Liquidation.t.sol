@@ -312,6 +312,65 @@ contract LendingMarketLiquidationTest is MarketBase {
         market.liquidate(bob, type(uint256).max);
     }
 
+    /*//////////////////////////////////////////////////////////////
+                       DUST / LIVENESS EDGE CASES
+    //////////////////////////////////////////////////////////////*/
+
+    function test_liquidate_dustRepayThatBurnsNoDebtReverts() public {
+        _skip(30 days); // index > 1.0, so 1 micro-USDC is worth < 1 unit of scaled debt
+        _setEthPrice(1200);
+        vm.prank(carol);
+        vm.expectRevert(LendingMarket.Market__NothingToLiquidate.selector);
+        market.liquidate(bob, 1);
+    }
+
+    /// Extreme collapse: 10 ETH are worth ~0.1 micro-USDC against ~10,000 USDC of debt. The
+    /// capped repayment is 1 wei, which burns no scaled debt, yet liquidation must still succeed
+    /// (it takes ALL collateral) so the bad debt can be written off instead of being stuck.
+    function test_liquidate_zeroBurnIsAllowedWhenItSeizesAllCollateral() public {
+        _skip(30 days);
+        uint256 debt = market.borrowBalance(bob);
+        ethFeed.setAnswer(1); // $0.00000001 per ETH
+
+        vm.prank(carol);
+        (uint256 repaid, uint256 seized) = market.liquidate(bob, type(uint256).max);
+
+        assertEq(seized, 10e18);
+        assertEq(repaid, 1, "liquidator pays 1 wei for ~worthless collateral");
+        assertEq(market.collateralOf(bob), 0);
+        assertEq(market.scaledDebt(bob), 0, "position fully cleared");
+        assertApproxEqAbs(market.totalBadDebt(), debt, 1, "whole debt socialized");
+        assertEq(market.totalBorrowAssets(), 0);
+        _assertSolvencyIdentity();
+    }
+
+    /// Worst case for suppliers: a 100%-utilized market whose only borrower's whole debt is
+    /// written off. The loss equals total supply, so the write-off saturates at zero instead of
+    /// reverting (a revert would make the position permanently unliquidatable).
+    function test_badDebt_totalLossSaturatesSupplyAtZero() public {
+        _depositCollateral(bob, 90e18); // 100 ETH = $200k => $150k limit
+        _borrow(bob, 90_000e6); // debt 100,000 == supply 100,000: utilization 100%
+        assertEq(market.utilization(), 1e18);
+
+        // Let the index rise above 1.0 so the 1-wei repayment burns no scaled debt: then the
+        // whole interest-inclusive debt (== supply at 100% utilization) is written off.
+        _skip(30 days);
+        uint256 debt = market.borrowBalance(bob);
+        assertGt(debt, 100_000e6);
+
+        ethFeed.setAnswer(1); // ETH collapses to $0.00000001
+        vm.prank(carol);
+        (uint256 repaid, uint256 seized) = market.liquidate(bob, type(uint256).max);
+
+        assertEq(repaid, 1);
+        assertEq(seized, 100e18);
+        assertEq(market.totalSupplyAssets(), 0, "saturated, no underflow revert");
+        assertEq(market.totalBadDebt(), debt);
+        assertEq(market.supplyBalance(alice), 0, "supplier lost everything");
+        assertEq(usdc.balanceOf(address(market)), 1, "only the liquidator's 1 wei is left");
+        _assertSolvencyIdentity();
+    }
+
     function test_healthFactorView_revertsWhenOracleBroken() public {
         ethFeed.setShouldRevert(true);
         vm.expectRevert(ChainlinkOracle.Oracle__FeedCallFailed.selector);
