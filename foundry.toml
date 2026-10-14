@@ -51,3 +51,9 @@ invariant = { runs = 256, depth = 128, fail_on_revert = true }
 [profile.diff]
 ffi = true
 fuzz = { runs = 1000 }
+
+[lint]
+# reentrancy-events: flagged on code that already emits every event BEFORE its token transfer
+# (checks-effects-interactions) inside nonReentrant functions, so it is a false positive here.
+# Remaining lints stay enabled; intentional exceptions are annotated inline with a reason.
+exclude_lints = ["reentrancy-events"]
