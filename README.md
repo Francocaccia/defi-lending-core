@@ -3,8 +3,9 @@
 A minimal over-collateralized lending protocol (Solidity + Foundry + Chainlink) with an
 independent C++ reference model that verifies the on-chain math.
 
-> **Status: M2 done (of M0-M8).** Implemented so far: the Chainlink oracle wrapper and the
-> kinked interest rate model, both fully tested. The lending market itself is not built yet.
+> **Status: M4 done (of M0-M8).** Implemented so far: Chainlink oracle wrapper, kinked interest
+> rate model, supplier shares, borrow index, health factor, liquidation and bad-debt recording,
+> all unit/fuzz/scenario tested. Invariant, fork and differential tests come in later milestones.
 > This README is filled in milestone by milestone. This is a portfolio/educational project,
 > **not** a production protocol: never use it with real funds.
 
@@ -63,8 +64,16 @@ deployment. Full list will be finalized in M7.
 
 ## Measured metrics
 
-None yet. Every number here will come from real command output (`forge test`,
-`forge coverage`, `forge snapshot`).
+As of M4, from real command output (re-measured at the end of every milestone):
+
+| Metric | Value | Command |
+|---|---|---|
+| Tests | 263 passed, 0 failed (default profile, 256 fuzz runs) | `forge test` |
+| Tests, CI profile | 263 passed, 0 failed (1000 fuzz runs) | `FOUNDRY_PROFILE=ci forge test` |
+| Line coverage of `src/` | 100% (290/290) | `forge coverage` |
+| Branch coverage of `src/` | 100% (62/62) | `forge coverage` |
+
+Gas snapshot, invariant results and fork-test results will be added in M5/M6.
 
 ## What I learned
 

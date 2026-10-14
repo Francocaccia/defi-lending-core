@@ -4,8 +4,8 @@ This document is the **specification** of the protocol math. The C++ reference m
 implemented from this file alone, so every formula here is exact: integer arithmetic only,
 explicit units, explicit rounding direction.
 
-Status legend: **[implemented]** = in `src/` and tested. **[planned]** = specified now so the
-spec does not drift, implemented in the named milestone; the text is updated if the
+Status legend: **[implemented]** = in `src/` and tested. **[planned]** = specified so the spec
+does not drift; implemented in the named milestone, and the text is updated if the
 implementation reveals a flaw.
 
 ## 0. Conventions
@@ -16,7 +16,10 @@ implementation reveals a flaw.
   `floor(a*b/c)`; it reverts if `c == 0` or if the final quotient does not fit in 256 bits.
   `mulDivUp(a, b, c) = floor(a*b/c) + (1 if a*b mod c != 0 else 0)`; same revert conditions
   (and it also reverts if the `+1` overflows).
-- Any other `+`, `-`, `*` overflowing 256 bits (or `-` underflowing) reverts.
+- Any other `+`, `-`, `*` overflowing 256 bits (or `-` underflowing) reverts. Note this includes
+  plain products that appear as `mulDiv` OPERANDS or DENOMINATORS (e.g. `repay * (WAD + bonus)`,
+  `collPrice * 10**debtDecimals * WAD` in section 7): those are ordinary checked multiplications
+  evaluated BEFORE the 512-bit division, and revert on overflow.
 - "Floor" = round toward zero (all values are non-negative).
 
 ### 0.2 Fixed-point scales
@@ -32,14 +35,19 @@ Always round **in favour of the protocol** (solvency), i.e. against the user:
 - amounts a user **owes** (debt) round **up**;
 - amounts a user **receives or may withdraw** round **down**;
 - rates and ratios used only as inputs (utilization, annual and per-second rates) round
-  **down**, because the interest suppliers earn is by construction exactly the interest
-  borrowers are charged (section 5.2), so rounding the rate cannot create a deficit.
+  **down**, because the interest suppliers earn is by construction exactly the increase in the
+  borrowers' derived total debt (section 5.2), so rounding the rate cannot create a deficit.
 
-## 1. Asset model [planned: M3]
-- Collateral asset: 18 decimals (WETH). Borrow/supply asset: 6 decimals (USDC-like).
-- All on-chain balances are in token base units. USD values are WAD-scaled (section 2.1).
+## 1. Asset model [implemented]
+- Collateral asset: 18 decimals (WETH in the illustrative setup). Borrow/supply asset: 6
+  decimals (USDC-like). The code is generic in token decimals `0..18`; `10**decimals` appears in
+  the valuation and liquidation formulas.
+- All on-chain balances are in token base units. USD values are WAD-scaled (section 2).
+- Tokens are assumed to be plain ERC-20s (no fee-on-transfer, no rebasing, no hooks).
+- Idle cash is the ACCOUNTING figure `liquidity = max(0, totalSupplyAssets - totalBorrowAssets)`,
+  never `balanceOf`, so a direct token donation to the contract changes no price or ratio.
 
-## 2. Oracle [implemented: M1]
+## 2. Oracle [implemented]
 
 One oracle instance per asset: `price()` returns the USD price of **one whole token**
 (`10**tokenDecimals` base units) scaled to 18 decimals.
@@ -73,14 +81,14 @@ configured value should be the feed's documented heartbeat plus a small margin. 
 feeds used (see `script/Addresses.sol` for addresses and sources): ETH/USD heartbeat 3600 s,
 USDC/USD heartbeat 82 800 s.
 
-### 2.4 Valuation (consumers of the price) [planned: M4]
+### 2.4 Valuation (consumers of the price) [implemented]
 ```
-collateralValueUsd = mulDiv(collateralAmount, collateralPriceWad, 10**18)   // floor (collateral)
-debtValueUsd       = mulDivUp(debtAmount, borrowPriceWad, 10**6)            // up    (debt)
+collateralValueUsd(amount, priceWad, dec) = mulDiv  (amount, priceWad, 10**dec)   // floor
+debtValueUsd      (amount, priceWad, dec) = mulDivUp(amount, priceWad, 10**dec)   // ceil
 ```
-(both WAD-scaled USD; 10^18 and 10^6 are the token decimals).
+Both results are WAD-scaled USD; `dec` is the token's decimals.
 
-## 3. Interest rate model [implemented: M2]
+## 3. Interest rate model [implemented]
 
 Parameters (all annual, WAD-scaled): `baseRate`, `slope1`, `slope2`, `optimalUtilization = K`.
 
@@ -131,7 +139,7 @@ With `baseRate=0.01e18` the annual rates are `0.01, 0.03, 0.05, 0.425, 0.80` (e1
 Floor case: `slope1=10, slope2=0, K=0.8e18, u=0.1e18` -> `10*0.1e18/0.8e18 = 1.25` -> `1`.
 `utilization(3, 1) = 333333333333333333`, `utilization(3, 2) = 666666666666666666`.
 
-## 4. Share accounting [planned: M3]
+## 4. Supplier share accounting [implemented]
 
 Supplier shares use **virtual shares/assets** to defeat the first-depositor inflation attack
 (an attacker mints 1 wei of shares then donates assets to make later deposits round to zero).
@@ -140,44 +148,206 @@ Supplier shares use **virtual shares/assets** to defeat the first-depositor infl
 VIRTUAL_SHARES = 1e6
 VIRTUAL_ASSETS = 1
 
-toSharesDown(a, A, S) = mulDiv  (a, S + VIRTUAL_SHARES, A + VIRTUAL_ASSETS)   // deposit: user gets fewer
-toSharesUp  (a, A, S) = mulDivUp(a, S + VIRTUAL_SHARES, A + VIRTUAL_ASSETS)   // withdraw by assets: burns more
-toAssetsDown(s, A, S) = mulDiv  (s, A + VIRTUAL_ASSETS, S + VIRTUAL_SHARES)   // redeem: user gets less
+toSharesDown(a, A, S) = mulDiv  (a, S + VIRTUAL_SHARES, A + VIRTUAL_ASSETS)
+toSharesUp  (a, A, S) = mulDivUp(a, S + VIRTUAL_SHARES, A + VIRTUAL_ASSETS)
+toAssetsDown(s, A, S) = mulDiv  (s, A + VIRTUAL_ASSETS, S + VIRTUAL_SHARES)
 toAssetsUp  (s, A, S) = mulDivUp(s, A + VIRTUAL_ASSETS, S + VIRTUAL_SHARES)
 ```
-`A` = `totalSupplyAssets`, `S` = `totalSupplyShares`. Operation -> function:
-supply(assets) mints `toSharesDown`; withdraw(assets) burns `toSharesUp`;
-redeem(shares) pays `toAssetsDown`.
+`A` = `totalSupplyAssets`, `S` = `totalSupplyShares` (interest already accrued).
 
-## 5. Borrow index and debt [planned: M3]
-### 5.1 Index accrual (RAY)
-Linear within an accrual interval, compounding across intervals (each accrual multiplies the
-previous index). With `dt = now - lastAccrual` and `r = borrowRatePerSecond(utilization)`
-evaluated at the **start** of the interval (state before the accrual):
-```
-interestFactor = r * dt                                    // RAY
-newIndex       = index + mulDivUp(index, interestFactor, RAY)     // up: debt grows at least as fast
-interest       = mulDivUp(totalBorrowAssets, interestFactor, RAY) // up
-totalBorrowAssets += interest;  totalSupplyAssets += interest     // suppliers earn exactly what is charged
-```
-### 5.2 Per-user debt
-A borrower stores `(principal, userIndex)`. `debt = mulDivUp(principal, index, userIndex)`
-(round up). Because each user's debt rounds up independently, `sum(userDebt) >= totalBorrowAssets`
-up to a bounded rounding tolerance (documented in M5 with the invariant tests).
+| Operation | Conversion | Direction (against the user) |
+|---|---|---|
+| `supply(assets)` | `shares = toSharesDown(assets, A, S)`; reverts if `shares == 0` | user gets fewer shares |
+| `withdraw(assets)` | `shares = toSharesUp(assets, A, S)` | user burns more shares |
+| `redeem(shares)` | `assets = toAssetsDown(shares, A, S)`; reverts if `assets == 0` | user gets less |
 
-## 6. Risk parameters and constructor checks [planned: M4]
-Illustrative defaults (immutable): `maxLtv = 0.75e18`, `liquidationThreshold = 0.80e18`,
+State updates: `supply`: `A += assets; S += shares`. `withdraw`/`redeem`: `A -= assets; S -= shares`,
+and require `assets <= liquidity` and `shares <= userShares`.
+
+Worked examples (independent Python): `toSharesDown(1000e6, 0, 0) = 1e15`;
+`toSharesDown(100e6, 1050e6, 1e15) = 95238095242630`, `toSharesUp(...) = 95238095242631`;
+`toAssetsDown(1e14, 1050e6, 1e15) = 104999999`, `toAssetsUp(...) = 105000000`.
+
+Properties (tested): deposit-then-redeem never returns more than deposited; burning
+`toSharesUp(a)` always covers a withdrawal of `a`; the share price
+`(A + VA) / (S + VS)` never decreases through supply, withdraw or redeem.
+
+## 5. Borrow index and scaled debt [implemented]
+
+### 5.1 State
+```
+borrowIndex      : RAY, initial value RAY (= 1.0), only grows
+totalScaledDebt  : sum of every borrower's scaledDebt (exact)
+scaledDebt[u]    : borrower u's index-normalized debt
+debtFromScaled(s, idx) = mulDivUp(s, idx, RAY)                        // ceil
+debt(u)                = debtFromScaled(scaledDebt[u], borrowIndex)
+totalBorrowAssets      = debtFromScaled(totalScaledDebt, borrowIndex) // DERIVED, never stored
+```
+
+### 5.2 Accrual
+With `elapsed = now - lastAccrual` (if 0, nothing happens), using the state BEFORE the accrual:
+```
+oldDebt   = totalBorrowAssets
+u         = utilization(totalSupplyAssets, oldDebt)
+r         = borrowRatePerSecond(u)                                    // RAY, section 3
+newIndex  = borrowIndex + mulDivUp(borrowIndex, r * elapsed, RAY)     // ceil
+interest  = debtFromScaled(totalScaledDebt, newIndex) - oldDebt
+borrowIndex = newIndex;  totalSupplyAssets += interest;  lastAccrual = now
+```
+The rate is the one in force at the START of the interval. Growth is linear within an interval and
+compounds across intervals (each accrual multiplies the previous index). Suppliers are credited
+EXACTLY the increase in derived total debt, so the identity of 5.5 cannot be broken by rounding
+of the rate. Every state-changing function accrues first.
+
+Worked example (independent Python): supply 100,000 USDC, debt 50,000 USDC (u = 0.5, annual rate
+0.025e18, per-second `792744799594114662`), one accrual of 365 days:
+`newIndex = 1024999999999999999980832000`, `interest = 1250000000` (1,250 USDC). Two accruals of
+100 days each from the same start give `index = 1013769079868900432720487744`, total debt
+`50688453994`, supplier assets `100688453994`.
+
+### 5.3 Borrow and repay
+```
+borrow(assets):   scaledAdded = mulDivUp(assets, RAY, borrowIndex)            // ceil: more debt
+                  scaledDebt[u] += scaledAdded; totalScaledDebt += scaledAdded
+repay(assets, u): debt = debt(u)
+                  if assets >= debt:  repaid = debt;   burned = scaledDebt[u]
+                  else:               repaid = assets; burned = mulDiv(assets, RAY, borrowIndex)   // floor
+                                      revert if burned == 0
+                  scaledDebt[u] -= burned; totalScaledDebt -= burned
+```
+Passing `assets = type(uint256).max` therefore means "repay the whole debt". Anyone may repay for
+anyone. Repay uses no oracle.
+
+### 5.4 Per-user vs total rounding
+Each user's debt is rounded up independently while the total is rounded up once, so for N
+borrowers: `0 <= sum(debt(u_i)) - totalBorrowAssets <= N - 1` wei (tested).
+
+### 5.5 Solvency identity
+`totalSupplyAssets <= idleCash + totalBorrowAssets` where `idleCash` = token balance (held by the
+market, up to unrecorded donations). Every operation preserves it: borrow lowers cash by `a` and
+raises derived debt by `>= a`; repay raises cash by `p` and lowers derived debt by `<= p`;
+accrual raises both sides by `interest`.
+
+## 6. Risk parameters, health factor and borrow limits [implemented]
+
+Illustrative defaults (immutable): `maxLtv = 0.75e18`, `liquidationThreshold = LT = 0.80e18`,
 `liquidationBonus = 0.05e18`, `closeFactor = 0.50e18`.
 
-Deployment checks (all must hold, else revert):
+### 6.1 Deployment checks (all must hold, else revert)
 ```
-0 < maxLtv < liquidationThreshold < WAD
-0 < liquidationBonus <= MAX_BONUS                (MAX_BONUS to be fixed in M4)
-liquidationThreshold * (WAD + liquidationBonus) < WAD * WAD      // LT*(1+bonus) < 1
+0 < maxLtv < LT < WAD
+0 < liquidationBonus <= MAX_LIQUIDATION_BONUS = 0.25e18
+LT * (WAD + liquidationBonus) < WAD * WAD            // LT*(1+bonus) < 1, STRICT
 0 < closeFactor <= WAD
 ```
-The `LT*(1+bonus) < 1` rule guarantees a liquidation at the threshold seizes collateral worth
-less than the position's total collateral (otherwise even a position exactly at the threshold
-would already be insolvent for the liquidator's payout).
+`LT*(1+bonus) < 1` guarantees that a liquidation of a position that has just crossed the
+threshold seizes collateral worth less than the position holds (otherwise every liquidation
+would already create bad debt). `maxLtv < LT` leaves a buffer between "cannot borrow more" and
+"can be liquidated".
 
-Health factor and liquidation formulas: added in M4.
+### 6.2 Health factor
+```
+healthFactor(collValue, debtValue, LT) = (debtValue == 0) ? 2**256-1
+                                         : mulDiv(collValue, LT, debtValue)       // floor, WAD
+liquidatable  <=>  healthFactor < WAD
+```
+Despite the floor, the decision is exact: `floor(c*LT/d) < WAD  <=>  c*LT < d*WAD`.
+`collValue`/`debtValue` come from section 2.4 with the current oracle prices.
+
+### 6.3 Borrow and collateral-withdrawal limit
+```
+maxDebtValue(collValue, maxLtv) = mulDiv(collValue, maxLtv, WAD)                  // floor
+withinMaxLtv  <=>  debtValue <= maxDebtValue(collValue, maxLtv)
+```
+Applied to the POST-action state: after `borrow`, and after `withdrawCollateral` when the user has
+debt (a user with no debt skips the oracle entirely). Using `maxLtv` (not `LT`) for withdrawals
+prevents withdrawing into a position that any price tick makes liquidatable. Within the limit
+implies `HF >= 1` because `maxLtv < LT`.
+
+## 7. Liquidation and bad debt [implemented]
+
+### 7.1 Eligibility and the repay cap
+A borrower with debt `D` (after accrual) is liquidatable iff `healthFactor < WAD` (6.2) using
+current prices. Let `requested` be the liquidator's cap (`type(uint256).max` = no cap; 0 reverts).
+```
+maxRepayable(D, closeFactor) = mulDivUp(D, closeFactor, WAD)          // ceil, <= D
+repaid = min(requested, maxRepayable(D, closeFactor))
+```
+Rounded UP so a 1-wei debt (floor would give 0) stays liquidatable.
+
+### 7.2 Collateral seized
+Let `pb, db` = borrow-asset price (WAD) and decimals, `pc, dc` = collateral price and decimals,
+`b` = liquidationBonus:
+```
+seizeForRepay(r) = mulDiv( r * (WAD + b),  pb * 10**dc,  pc * 10**db * WAD )          // floor
+repayForSeize(s) = mulDivUp( s,  pc * 10**db * WAD,  pb * (WAD + b) * 10**dc )        // ceil
+```
+`repayForSeize` is the inverse. Properties (tested): `repayForSeize(seizeForRepay(r)) <= r` and
+`seizeForRepay(repayForSeize(s)) >= s`; the seized value never exceeds `repaid * (1 + b)`.
+Worked example (independent): repay 5000e6 USDC, ETH = $1,200, b = 5% ->
+`seizeForRepay = 4.375e18`; `repayForSeize(10e18)` at ETH = $500 -> `4761904762`.
+
+### 7.3 Final amounts
+```
+C = collateral of the borrower
+seized = seizeForRepay(repaid)
+if seized > C:  seized = C;  repaid = min(repaid, repayForSeize(C))
+burned = (repaid >= D) ? scaledDebt[borrower] : mulDiv(repaid, RAY, borrowIndex)          // floor
+revert NothingToLiquidate if repaid == 0 or seized == 0
+revert NothingToLiquidate if burned == 0 and seized != C           // see 7.4
+```
+Effects: `scaledDebt -= burned; totalScaledDebt -= burned; collateral[b] -= seized`. The liquidator
+pays `repaid` of the borrow asset and receives `seized` collateral.
+
+### 7.4 Zero-burn exception (liveness)
+A repayment too small to burn any scaled debt is pointless and reverts, EXCEPT when it seizes ALL
+remaining collateral: then the leftover debt is written off (7.5). Without the exception, an
+extreme price collapse (collateral worth < ~1 unit of the borrow asset against large debt) would
+make the position impossible to liquidate and its bad debt could never be cleared. (Found by
+fuzzing; covered by a dedicated test.)
+
+### 7.5 Bad debt
+After the effects of 7.3, if `collateral[b] == 0` and `scaledDebt[b] != 0`:
+```
+debtBefore = debtFromScaled(totalScaledDebt, borrowIndex)
+totalScaledDebt -= scaledDebt[b];  scaledDebt[b] = 0
+loss = debtBefore - debtFromScaled(totalScaledDebt, borrowIndex)
+totalSupplyAssets = (loss >= totalSupplyAssets) ? 0 : totalSupplyAssets - loss     // saturating
+totalBadDebt += loss
+```
+The loss is the DROP in derived total debt (not the borrower's own ceil'd debt) so the solvency
+identity (5.5) stays exact; it is socialized to suppliers by lowering the share price
+`(A+1)/(S+1e6)`. The subtraction saturates because a revert here would make liquidation
+impossible. Worked example (independent): ETH = $500, standard position (10 ETH, 10,000 USDC debt,
+100,000 supplied): `seized = 10e18`, `repaid = 4761904762`, `loss = 5238095238`,
+`totalSupplyAssets = 94761904762`, which equals the market's cash.
+
+**Not implemented (documented gap):** a production system would first draw an insurance fund /
+reserve and only then socialize; v1 has no admin, no reserve factor and no fund. See
+docs/THREAT_MODEL.md.
+
+## 8. Operations, ordering and oracle dependence [implemented]
+
+Every state-changing function is `nonReentrant` and follows: (1) accrue interest, (2) checks,
+(3) storage effects, (4) token transfers last.
+
+| Function | Needs oracle? | Check applied |
+|---|---|---|
+| `supply`, `withdraw`, `redeem` | no | liquidity (`assets <= liquidity`) and share balance |
+| `depositCollateral` | no | amount > 0 |
+| `withdrawCollateral` | only if the user has debt | post-state `withinMaxLtv` |
+| `borrow` | yes (both prices) | `assets <= liquidity`, post-state `withinMaxLtv` |
+| `repay` | no | debt exists |
+| `liquidate` | yes (both prices) | `healthFactor < WAD`, 7.x |
+
+A stale or invalid oracle therefore freezes exactly the actions that extend credit or release
+collateral against a price; deposits, repayments, supplier exits and debt-free collateral exits
+keep working.
+
+## 9. Pure function catalogue (for the differential tests) [to be finalized in M7]
+The functions below are pure, take all inputs explicitly and are the candidates for the CLI of the
+reference model (exact names, argument order and encoding are fixed in `docs/M8_HANDOFF.md`):
+`utilization`, `annualBorrowRate`, `borrowRatePerSecond`, `accrueIndex`, `scaledFromAssetsUp`,
+`scaledFromAssetsDown`, `debtFromScaled`, `toSharesDown`, `toSharesUp`, `toAssetsDown`,
+`toAssetsUp`, `collateralValueUsd`, `debtValueUsd`, `healthFactor`, `maxDebtValue`,
+`maxRepayable`, `seizeForRepay`, `repayForSeize`.
