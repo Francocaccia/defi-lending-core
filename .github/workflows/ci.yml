@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  solidity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.5
+
+      - name: Format check
+        run: forge fmt --check
+
+      - name: Build
+        run: forge build --sizes
+
+      # Fork tests read MAINNET_RPC_URL; with no secret configured they skip, so CI
+      # stays green for forks and PRs without secrets.
+      - name: Test
+        run: forge test -vvv
+        env:
+          FOUNDRY_PROFILE: ci
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+
+      # From M8 on, add BEFORE the "Test" step:
+      #   - name: Build C++ reference model
+      #     run: cmake -S reference-model -B reference-model/build && cmake --build reference-model/build
+      #   - name: C++ unit tests
+      #     run: ctest --test-dir reference-model/build --output-on-failure
+      # and AFTER it:
+      #   - name: Differential tests
+      #     run: forge test --match-path "test/differential/*" -vvv
+      #     env:
+      #       FOUNDRY_PROFILE: diff
