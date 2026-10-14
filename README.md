@@ -3,8 +3,10 @@
 A minimal over-collateralized lending protocol (Solidity + Foundry + Chainlink) with an
 independent C++ reference model that verifies the on-chain math.
 
-> **Status: M2 of M8.** Implemented so far: Chainlink oracle wrapper and the kinked interest\n> rate model (both fully tested). The lending market itself is not built yet. This README is\n> filled in milestone by milestone. This is a portfolio/educational project, **not** a
-> production protocol: never use it with real funds.
+> **Status: M2 done (of M0-M8).** Implemented so far: the Chainlink oracle wrapper and the
+> kinked interest rate model, both fully tested. The lending market itself is not built yet.
+> This README is filled in milestone by milestone. This is a portfolio/educational project,
+> **not** a production protocol: never use it with real funds.
 
 ## What it will do (v1 scope)
 
