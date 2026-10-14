@@ -71,4 +71,4 @@ TODO (author).
 
 ## License
 
-Pending. See `LICENSE`.
+MIT. See `LICENSE`. Educational project, not audited, never use with real funds.
