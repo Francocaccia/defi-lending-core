@@ -135,9 +135,13 @@ contract DifferentialTest is Test {
         }
     }
 
-    /// @dev Either a realistic bounded value or the raw fuzz value (overflow / edge exploration).
+    /// @dev A realistic bounded value, or (when `wide`) either the raw fuzz value or a bounded one,
+    ///      chosen per ARGUMENT by a hash of the value. Mixing the two means a single huge operand
+    ///      sits next to realistic ones, which reaches far more successful edge results than
+    ///      all-raw inputs (those almost always overflow), while raw values still explore overflow.
     function _n(uint256 x, bool wide, uint256 hi) internal pure returns (uint256) {
-        return wide ? x : bound(x, 0, hi);
+        if (!wide) return bound(x, 0, hi);
+        return uint256(keccak256(abi.encode(x))) & 1 == 0 ? x : bound(x, 0, hi);
     }
 
     function _dec(uint256 x, bool wide) internal pure returns (uint8) {
@@ -513,6 +517,77 @@ contract DifferentialTest is Test {
             "repayForSeize",
             abi.encodeCall(h.repayForSeize, (seize, dp, dd, cp, cd, bonus)),
             _a(seize, dp, dd, cp, cd, bonus)
+        );
+    }
+
+    /// Parameter sets that are VALID, or wrong by exactly one unit at one boundary. Purely random
+    /// inputs satisfy all eight conditions only ~1% of the time, so the success path and the
+    /// strict `LT * (1 + bonus) < 1` edge would otherwise be barely exercised.
+    function testFuzz_diff_validateRiskParams_nearValid(
+        uint256 a,
+        uint256 b,
+        uint256 c,
+        uint256 d,
+        uint8 kind
+    ) public {
+        uint256 lt = bound(a, 2, WAD - 1);
+        uint256 ltv = bound(b, 1, lt - 1);
+        // largest bonus with lt * (WAD + bonus) < WAD * WAD
+        uint256 maxBonus = (WAD * WAD - 1) / lt - WAD;
+        if (maxBonus > 0.25e18) maxBonus = 0.25e18;
+        vm.assume(maxBonus >= 1);
+        uint256 bonus = bound(c, 1, maxBonus);
+        uint256 cf = bound(d, 1, WAD);
+
+        kind = kind % 12;
+        if (kind == 1) bonus = maxBonus; // valid, exactly on the boundary
+        else if (kind == 2) bonus = (WAD * WAD - 1) / lt - WAD + 1; // LT*(1+b) just reaches 1: invalid
+        else if (kind == 3) ltv = lt; // not strictly below
+        else if (kind == 4) ltv = lt - 1; // valid, exactly on the boundary
+        else if (kind == 5) lt = WAD; // invalid
+        else if (kind == 6) cf = WAD; // valid
+        else if (kind == 7) cf = WAD + 1; // invalid
+        else if (kind == 8) cf = 0; // invalid
+        else if (kind == 9) bonus = 0.25e18; // cap: valid only if the threshold condition allows it
+        else if (kind == 10) bonus = 0.25e18 + 1; // invalid
+        else if (kind == 11) bonus = 0; // invalid
+
+        _diff(
+            "validateRiskParams",
+            abi.encodeCall(h.validateRiskParams, (ltv, lt, bonus, cf)),
+            _a(ltv, lt, bonus, cf)
+        );
+    }
+
+    /// Same idea for the rate model: valid sets and one-unit boundary violations.
+    function testFuzz_diff_validateRateParams_nearValid(
+        uint256 a,
+        uint256 b,
+        uint256 c,
+        uint256 d,
+        uint8 kind
+    ) public {
+        uint256 base = bound(a, 0, 10e18);
+        uint256 s1 = bound(b, 0, 10e18);
+        uint256 s2 = bound(c, 0, 10e18);
+        uint256 k = bound(d, 1, WAD - 1);
+
+        kind = kind % 11;
+        if (kind == 1) k = 1; // valid boundary
+        else if (kind == 2) k = WAD - 1; // valid boundary
+        else if (kind == 3) k = 0; // invalid
+        else if (kind == 4) k = WAD; // invalid
+        else if (kind == 5) base = 10e18; // valid boundary
+        else if (kind == 6) base = 10e18 + 1; // invalid
+        else if (kind == 7) s1 = 10e18 + 1; // invalid
+        else if (kind == 8) s2 = 10e18 + 1; // invalid
+        else if (kind == 9) s2 = 10e18; // valid boundary
+        else if (kind == 10) k = WAD + 1; // invalid
+
+        _diff(
+            "validateRateParams",
+            abi.encodeCall(h.validateRateParams, (base, s1, s2, k)),
+            _a(base, s1, s2, k)
         );
     }
 
