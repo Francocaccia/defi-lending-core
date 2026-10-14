@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
 import {MarketBase} from "../utils/MarketBase.sol";
 import {LendingMarket} from "../../src/LendingMarket.sol";
 
 contract LendingMarketSupplyTest is MarketBase {
+    using stdStorage for StdStorage;
+
     event Supply(address indexed supplier, uint256 assets, uint256 shares);
     event Withdraw(address indexed supplier, uint256 assets, uint256 shares);
 
@@ -32,6 +35,16 @@ contract LendingMarketSupplyTest is MarketBase {
         vm.prank(alice);
         vm.expectRevert(LendingMarket.Market__ZeroAmount.selector);
         market.supply(0);
+    }
+
+    /// Defense in depth: with virtual shares a deposit can only round to zero shares if the share
+    /// price has grown by ~1e6x, which no realistic history reaches. Force that state by writing
+    /// storage directly and check the guard refuses to swallow the deposit.
+    function test_supply_revertsInsteadOfMintingZeroShares() public {
+        stdstore.target(address(market)).sig("totalSupplyAssets()").checked_write(uint256(1e40));
+        vm.prank(alice);
+        vm.expectRevert(LendingMarket.Market__ZeroShares.selector);
+        market.supply(1e6);
     }
 
     function test_supply_revertsWithoutAllowance() public {
