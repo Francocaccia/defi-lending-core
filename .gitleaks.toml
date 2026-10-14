@@ -1,0 +1,13 @@
+# Gitleaks config: extend the default ruleset, only allowlist what is provably not a secret.
+# Run locally:  gitleaks detect --source . --redact
+title = "defi-lending-core gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders and third-party vendored code"
+paths = [
+  '''^\.env\.example$''',
+  '''^lib/''',
+]

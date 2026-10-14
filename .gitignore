@@ -1,0 +1,38 @@
+# Foundry
+out/
+cache/
+broadcast/
+!broadcast/.gitkeep
+coverage/
+lcov.info
+.gas-snapshot.tmp
+
+# Secrets: NEVER commit. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.keystore
+keystore/
+
+# C++ reference model build output (M8)
+reference-model/build/
+reference-model/cmake-build-*/
+
+# Python / Slither
+__pycache__/
+.venv/
+slither-report.*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Private notes: NOT for publication. Stays local; never pushed.
+PORTFOLIO_NOTES.md
+
+# Windows-generated lock uses backslash paths; submodule SHAs already pin dependency versions
+foundry.lock
