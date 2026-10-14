@@ -3,9 +3,10 @@
 A minimal over-collateralized lending protocol (Solidity + Foundry + Chainlink) with an
 independent C++ reference model that verifies the on-chain math.
 
-> **Status: M4 done (of M0-M8).** Implemented so far: Chainlink oracle wrapper, kinked interest
-> rate model, supplier shares, borrow index, health factor, liquidation and bad-debt recording,
-> all unit/fuzz/scenario tested. Invariant, fork and differential tests come in later milestones.
+> **Status: M6 done (of M0-M8).** Implemented and tested: Chainlink oracle wrapper, kinked interest
+> rate model, supplier shares, borrow index, health factor, liquidation and bad-debt recording.
+> Verified by unit, fuzz, scenario, invariant, mainnet-fork and reentrancy tests plus a Slither pass.
+> Demo script, final README and the C++ reference model (differential tests) come later.
 > This README is filled in milestone by milestone. This is a portfolio/educational project,
 > **not** a production protocol: never use it with real funds.
 
@@ -64,16 +65,31 @@ deployment. Full list will be finalized in M7.
 
 ## Measured metrics
 
-As of M4, from real command output (re-measured at the end of every milestone):
+Measured on Foundry 1.8.5 / solc 0.8.28 (full details and commands in `docs/GAS_AND_COVERAGE.md`):
 
-| Metric | Value | Command |
-|---|---|---|
-| Tests | 263 passed, 0 failed (default profile, 256 fuzz runs) | `forge test` |
-| Tests, CI profile | 263 passed, 0 failed (1000 fuzz runs) | `FOUNDRY_PROFILE=ci forge test` |
-| Line coverage of `src/` | 100% (290/290) | `forge coverage` |
-| Branch coverage of `src/` | 100% (62/62) | `forge coverage` |
+| Metric | Value |
+|---|---|
+| Tests, default profile, no RPC (what CI runs) | 275 passed, 0 failed, 1 skipped (fork suite) |
+| Tests, CI profile (1000 fuzz runs, invariant depth 128) | 275 passed, 0 failed, 1 skipped |
+| Tests with a mainnet RPC configured | 282 passed, 0 failed |
+| Invariant properties (random action sequences, 5 actors) | 13, all hold; one campaign reached 53 liquidations and 13 bad-debt events |
+| Line / statement / branch / function coverage of `src/` | 100% (290/290), 100% (375/375), 100% (62/62), 100% (51/51) |
+| Slither (scope `src/`) | 0 findings after documented triage (41 raw) |
+| `LendingMarket` runtime size | 9,272 bytes |
 
-Gas snapshot, invariant results and fork-test results will be added in M5/M6.
+Gas per function (median, unit/scenario tests, fresh storage): `supply` 133k, `borrow` 138k,
+`repay` 64k, `withdrawCollateral` 66k, `liquidate` 131k; see the caveats in
+`docs/GAS_AND_COVERAGE.md`.
+
+## Security documentation
+
+| Document | Contents |
+|---|---|
+| `docs/DESIGN.md` | exact math and rounding rules (the spec) |
+| `docs/THREAT_MODEL.md` | threats, defences, evidence, and what is NOT mitigated |
+| `docs/ROUNDING_REVIEW.md` | every rounding decision and the test that pins it |
+| `docs/SLITHER_TRIAGE.md` | all 41 static-analysis findings, individually judged |
+| `docs/GAS_AND_COVERAGE.md` | commands and raw numbers behind the metrics above |
 
 ## What I learned
 

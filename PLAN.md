@@ -1,7 +1,7 @@
 # PLAN
 
 Living plan for `defi-lending-core`. Updated at the end of every milestone. Numbers here come
-from real command output; the date and commit they were measured at are stated next to them.
+from real command output (commands in `docs/GAS_AND_COVERAGE.md`).
 
 ## 1. Goal
 
@@ -17,14 +17,14 @@ model. Quality over feature count. Educational only: never real funds, never mai
 | M1 | Oracle wrapper + mock aggregator + tests | **done** | verified mainnet/Sepolia feed addresses in `script/Addresses.sol` |
 | M2 | Interest rate model + tests | **done** | kinked model, WAD annual / RAY per-second |
 | M3 | Core accounting (shares, collateral, borrow/repay, index) | **done** | scaled-debt model, virtual shares |
-| M4 | Risk (HF, guards, liquidation, bad-debt recording) | **done** | found + fixed a liquidity hole (zero-burn liquidation) |
-| M5 | Invariant tests + mainnet fork tests | in progress | |
-| M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | pending | needs Slither; WSL not installed, trying native venv |
-| M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | pending | |
+| M4 | Risk (HF, guards, liquidation, bad-debt recording) | **done** | found + fixed a liveness hole (zero-burn liquidation) |
+| M5 | Invariant tests + mainnet fork tests | **done** | 13 invariants; fork tests skip without `MAINNET_RPC_URL` |
+| M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | **done** | Slither ran natively in a venv (no WSL); 0 findings after triage |
+| M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **next** | |
 | M8 | C++ reference model + differential tests | pending, **needs your approval after M7** | must run in a FRESH session that only sees `docs/DESIGN.md` and `reference-model/` |
 | M9 | Monte Carlo risk simulator | stretch, only if asked | |
 
-## 3. What exists today (as of the M4 commit `e6bba55`)
+## 3. What exists today
 
 - `src/oracle/ChainlinkOracle.sol`: one instance per asset, 18-decimal USD price, fails closed
   (zero/negative, incomplete round, future timestamp, stale round, stale heartbeat, overflow,
@@ -34,46 +34,41 @@ model. Quality over feature count. Educational only: never real funds, never mai
 - `src/LendingMarket.sol`: supply/withdraw/redeem (shares), collateral deposit/withdraw,
   borrow/repay (global index, scaled debt), liquidation with close factor + bonus, bad-debt
   write-off socialized to suppliers. Immutable parameters, no admin.
-- Tests: unit, fuzz, scenario (oracle failures, cascade, bank run, lifecycle). Mutation check
-  by hand: 20/20 injected bugs in the market killed.
-- Measured at `e6bba55`: 263 tests pass (default and CI profile), 100% line/statement/branch/
-  function coverage of `src/`.
-- CI (GitHub Actions): fmt check, build, test. Green.
+- Tests: unit, fuzz, scenario, **invariant** (13 properties, handler with 5 actors), **fork**
+  (real Chainlink feeds, WETH, USDC), **security** (hostile-token reentrancy, read-only
+  reentrancy).
+- Static analysis and review docs: `docs/THREAT_MODEL.md`, `docs/SLITHER_TRIAGE.md`,
+  `docs/ROUNDING_REVIEW.md`, `docs/GAS_AND_COVERAGE.md`.
+- Measured (details in `docs/GAS_AND_COVERAGE.md`): 275 tests pass without an RPC (1 skipped:
+  the fork suite), 282 with one; 100% line/statement/branch/function coverage of `src/`;
+  Slither 0 findings after documented triage (41 raw).
+- Mutation checks by hand: 18/18 distinct bugs in the market caught by the tests; 11/11 by the
+  invariant suite alone; 8/8 `nonReentrant` guards verified by the reentrancy tests.
+- CI (GitHub Actions): fmt check, build, test. Fork tests skip (no secret configured).
 
 ## 4. Pending work
 
-### M5: Invariants and fork tests
-- Invariant tests with a handler (actors: suppliers, borrowers, liquidator; actions: supply,
-  withdraw, redeem, deposit/withdraw collateral, borrow, repay, liquidate, price moves, time
-  warps, interest accrual):
-  - (a) solvency: `totalSupplyAssets <= cash + totalBorrowAssets`, with bad debt accounted;
-  - (b) `sum(user debts)` vs derived total within N-1 wei;
-  - (c) every successful collateral withdrawal leaves the position within max LTV (ghost check);
-  - (d) share price never decreases except through recorded bad debt;
-  - plus supporting: token conservation (collateral held == `totalCollateral`), `sum(shares)
-    == totalSupplyShares`, `sum(scaled) == totalScaledDebt`, `borrowIndex` monotone.
-- Fork tests against mainnet with the REAL Chainlink ETH/USD and USDC/USD feeds and real
-  WETH/USDC; skipped automatically when `MAINNET_RPC_URL` is not set.
-
-### M6: Security pass
-- Slither: run, triage every finding (fix or justify) in `docs/`.
-- `docs/THREAT_MODEL.md`: oracle manipulation/staleness, liquidation cascades, bad debt,
-  rounding/donation attacks, reentrancy (incl. a hostile-token test), unsupported tokens, and
-  what is NOT mitigated.
-- Rounding review of every conversion; gas snapshot; coverage report with explanations.
-
 ### M7: Demo and polish
 - `forge script` demo (supply, borrow, price crash via mock oracle, liquidation) with readable
-  output; optional Sepolia deploy script (burner key only).
-- README complete (architecture diagram, run instructions with/without C++, limitations).
-- DESIGN.md final. **`docs/M8_HANDOFF.md`**: exact CLI function names, argument order, output
-  encoding, and the steps to start the clean M8 session.
+  output on a local Anvil; optional Sepolia deploy script (burner key only).
+- README complete: architecture diagram (incl. the Solidity/C++ split), run instructions
+  with/without C++, design decisions, limitations, "reference model" section placeholder.
+- DESIGN.md final (complete before M8; section 9 lists the pure-function catalogue).
+- **`docs/M8_HANDOFF.md`**: exact CLI function names, argument order, output encoding, and the
+  steps for you to start the clean M8 session.
 
-### M8: C++ reference model (after approval)
+### M8: C++ reference model (after your approval)
 - Fresh session. Reads only `docs/DESIGN.md` (+ `docs/M8_HANDOFF.md`) and `reference-model/`.
   CMake, Boost.Multiprecision, Catch2/GoogleTest. Needs WSL (or a Windows C++ toolchain).
 - Differential fuzz tests via `vm.ffi` under `FOUNDRY_PROFILE=diff`; CI builds and tests the C++
   before `forge test`.
+
+### Smaller follow-ups (not blocking)
+- Add Slither to CI once a Linux runner setup is confirmed (currently documented, run manually).
+- gitleaks is configured (`.gitleaks.toml`) but not installed locally nor run in CI.
+- Optionally add `MAINNET_RPC_URL` as a CI secret to run the fork suite in CI.
+- Hardening ideas listed in `docs/THREAT_MODEL.md` §3 (circuit breaker, insurance fund) are
+  intentionally out of scope for v1.
 
 ## 5. Key design decisions so far (details in `docs/DESIGN.md`)
 
@@ -87,15 +82,15 @@ model. Quality over feature count. Educational only: never real funds, never mai
 8. A liquidation that burns no scaled debt is allowed only if it seizes all collateral.
 9. An unusable oracle freezes borrow / liquidate / debt-bearing collateral withdrawal only;
    deposits, repayments and supplier exits keep working.
+10. Static-analysis suppressions are inline, scoped and justified (`docs/SLITHER_TRIAGE.md`).
 
 ## 6. Open decisions / things only the owner can do
 
-- Install WSL (`wsl --install -d Ubuntu`, admin PowerShell, reboot): needed for M8, and a
-  cleaner Slither setup in M6.
+- Install WSL (`wsl --install -d Ubuntu`, admin PowerShell, reboot): needed for M8 (C++ toolchain).
 - Confirm the copyright holder name in `LICENSE` ("Franco Caccia" is a guess).
 - Decide: repo visibility (private for now), repo name, public Sepolia deploy (burner key only).
-- Choose a free public RPC for fork tests (a throwaway one is used for local checks only; the
-  URL lives in `.env`, never in the repo) and decide whether to add it as a CI secret.
+- Decide whether to add a free public mainnet RPC as a CI secret for the fork suite (the tests
+  skip without it; a public keyless endpoint was used for local verification only).
 - Write the README section "What I learned".
 
 ## 7. Rules that always apply
