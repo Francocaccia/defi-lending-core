@@ -18,8 +18,8 @@ optimizer_runs = 200
 # under `FOUNDRY_PROFILE=diff`, which is the only profile that enables it.
 ffi = false
 
-# Tests may only write the gas/coverage artefacts they need; no blanket access.
-fs_permissions = []
+# Read-only access to exactly one fixture file (the differential-test vectors); no writes, no wildcards.
+fs_permissions = [{ access = "read", path = "./test/differential/vectors.txt" }]
 
 [fuzz]
 runs = 256
