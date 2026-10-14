@@ -27,6 +27,17 @@ jobs:
       - name: Build
         run: forge build --sizes
 
+      # The C++ reference model is built BEFORE the tests; if it fails to build, the job fails.
+      # The protocol itself does not depend on it: with no C++ toolchain, `forge test` still
+      # passes (the differential tests skip when ffi is off or the binary is missing).
+      - name: Build C++ reference model
+        run: |
+          cmake -S reference-model -B reference-model/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build reference-model/build
+
+      - name: C++ unit tests
+        run: ctest --test-dir reference-model/build --output-on-failure
+
       # Fork tests read MAINNET_RPC_URL; with no secret configured they skip, so CI
       # stays green for forks and PRs without secrets.
       - name: Test
@@ -35,13 +46,26 @@ jobs:
           FOUNDRY_PROFILE: ci
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
 
-      # From M8 on, add BEFORE the "Test" step:
-      #   - name: Build C++ reference model
-      #     run: cmake -S reference-model -B reference-model/build && cmake --build reference-model/build
-      #   - name: C++ unit tests
-      #     run: ctest --test-dir reference-model/build --output-on-failure
-      # and AFTER it:
-      #   - name: Differential tests
-      #     run: forge test --match-path "test/differential/*" -vvv
-      #     env:
-      #       FOUNDRY_PROFILE: diff
+      # Solidity vs the independent C++ model (the only profile with ffi enabled).
+      - name: Differential tests (Solidity vs C++)
+        run: forge test --match-path "test/differential/*" -vvv
+        env:
+          FOUNDRY_PROFILE: diff
+
+  # Portability check of the model alone: compiles with GCC (Linux) and MSVC (Windows).
+  reference-model:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S reference-model -B reference-model/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build reference-model/build --config Release
+
+      - name: Test
+        run: ctest --test-dir reference-model/build -C Release --output-on-failure
