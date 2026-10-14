@@ -250,8 +250,9 @@ contract MainnetForkTest is Test {
     function _republishAtCurrentPrices(uint256 dt) internal {
         int256 eth = int256(ethOracle.price() / 1e10);
         int256 usdc = int256(usdcOracle.price() / 1e10);
-        vm.warp(block.timestamp + dt);
-        _mockFeed(ETH_FEED, eth, block.timestamp);
-        _mockFeed(USDC_FEED, usdc, block.timestamp);
+        uint256 later = vm.getBlockTimestamp() + dt;
+        vm.warp(later);
+        _mockFeed(ETH_FEED, eth, later);
+        _mockFeed(USDC_FEED, usdc, later);
     }
 }
