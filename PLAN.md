@@ -20,8 +20,8 @@ model. Quality over feature count. Educational only: never real funds, never mai
 | M4 | Risk (HF, guards, liquidation, bad-debt recording) | **done** | found + fixed a liveness hole (zero-burn liquidation) |
 | M5 | Invariant tests + mainnet fork tests | **done** | 13 invariants; fork tests skip without `MAINNET_RPC_URL` |
 | M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | **done** | Slither ran natively in a venv (no WSL); 0 findings after triage |
-| M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **next** | |
-| M8 | C++ reference model + differential tests | pending, **needs your approval after M7** | must run in a FRESH session that only sees `docs/DESIGN.md` and `reference-model/` |
+| M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **done** | demo verified on Anvil (22 txs) and in simulation; Sepolia script dry-run against live feeds |
+| M8 | C++ reference model + differential tests | **started in a fresh session** | independence rule: the model is written from `docs/DESIGN.md` only; see `docs/M8_HANDOFF.md` |
 | M9 | Monte Carlo risk simulator | stretch, only if asked | |
 
 ## 3. What exists today
@@ -39,30 +39,30 @@ model. Quality over feature count. Educational only: never real funds, never mai
   reentrancy).
 - Static analysis and review docs: `docs/THREAT_MODEL.md`, `docs/SLITHER_TRIAGE.md`,
   `docs/ROUNDING_REVIEW.md`, `docs/GAS_AND_COVERAGE.md`.
-- Measured (details in `docs/GAS_AND_COVERAGE.md`): 275 tests pass without an RPC (1 skipped:
-  the fork suite), 282 with one; 100% line/statement/branch/function coverage of `src/`;
+- Measured (details in `docs/GAS_AND_COVERAGE.md`): 277 tests pass without an RPC (2 skipped: the fork
+  and differential suites), 284 with one; 100% line/statement/branch/function coverage of `src/`;
   Slither 0 findings after documented triage (41 raw).
+- Demo: `script/Demo.s.sol` (Anvil + simulation, guarded by `test/script/Demo.t.sol`); optional
+  `script/DeploySepolia.s.sol` (live Sepolia feeds, mock tokens, throwaway key, refuses other chains).
+- M7 refactor: accrual / repay / liquidation / bad-debt kernels moved into the pure `MarketMath`;
+  `docs/DESIGN.md` section 9 is the full function catalogue (with evaluation rules R1-R7);
+  `test/differential/vectors.txt` holds ~1,100 spec vectors from an independent implementation,
+  verified against the Solidity; `test/differential/Differential.t.sol` is the ffi side (skips
+  without ffi or the binary).
 - Mutation checks by hand: 18/18 distinct bugs in the market caught by the tests; 11/11 by the
   invariant suite alone; 8/8 `nonReentrant` guards verified by the reentrancy tests.
 - CI (GitHub Actions): fmt check, build, test. Fork tests skip (no secret configured).
 
 ## 4. Pending work
 
-### M7: Demo and polish
-- `forge script` demo (supply, borrow, price crash via mock oracle, liquidation) with readable
-  output on a local Anvil; optional Sepolia deploy script (burner key only).
-- README complete: architecture diagram (incl. the Solidity/C++ split), run instructions
-  with/without C++, design decisions, limitations, "reference model" section placeholder.
-- DESIGN.md final (complete before M8; section 9 lists the pure-function catalogue).
-- **`docs/M8_HANDOFF.md`**: exact CLI function names, argument order, output encoding, and the
-  steps for you to start the clean M8 session.
-
-### M8: C++ reference model (after your approval)
-- Fresh session. Reads only `docs/DESIGN.md` (+ `docs/M8_HANDOFF.md`) and `reference-model/`.
-  CMake, Boost.Multiprecision, Catch2/GoogleTest. Needs WSL (or a Windows C++ toolchain).
-- Differential fuzz tests via `vm.ffi` under `FOUNDRY_PROFILE=diff`; CI builds and tests the C++
-  before `forge test`.
-
+### M8: C++ reference model (in progress, fresh session)
+- Reads only `docs/DESIGN.md`, `docs/M8_HANDOFF.md`, `test/differential/` and `reference-model/`
+  (no `src/` until the first differential run is done).
+- Deliverables: `reference-model/` (CMake, C++17, big-integer math), C++ unit tests incl. every
+  line of `vectors.txt`, a differential run, `docs/DIFFERENTIAL_REPORT.md` (every mismatch and
+  every DESIGN ambiguity), CI building the model before `forge test`, README "Reference model".
+- Environment: MSVC 14.41 + CMake + Ninja come with Visual Studio 2022 (no WSL needed); Boost is
+  NOT installed, so any download needs the owner's OK.
 ### Smaller follow-ups (not blocking)
 - Add Slither to CI once a Linux runner setup is confirmed (currently documented, run manually).
 - gitleaks is configured (`.gitleaks.toml`) but not installed locally nor run in CI.

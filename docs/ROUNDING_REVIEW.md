@@ -5,6 +5,9 @@ withdrawable amounts down. This file walks every place where an integer division
 rounding happens, states the direction, who benefits, the maximum error, and which test pins it.
 "MD" = `mulDiv` (floor), "MDU" = `mulDivUp` (ceil).
 
+Note (M7): the accrual, repay, liquidation and bad-debt calculations now live in the pure library
+`MarketMath` (behaviour unchanged); rows below that cite market behaviour refer to those kernels.
+
 Review method: read every function in `src/` for `/`, `mulDiv` and casts; for each, ask "if this
 were rounded the other way, who could extract value, and would a test notice?". The second half
 was done mechanically: each direction was flipped by hand (mutation) and the suite had to fail.

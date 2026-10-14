@@ -14,6 +14,9 @@ slither . --config-file slither.config.json
 
 ## Result
 
+Re-run after the M7 refactor (accrual / repay / liquidation / bad-debt kernels moved into the pure
+`MarketMath` library): still **0** findings with the same configuration.
+
 | Stage | Findings |
 |---|---|
 | First run, default config | **41** (0 High, 10 Medium, 13 Low, 18 Informational) |
