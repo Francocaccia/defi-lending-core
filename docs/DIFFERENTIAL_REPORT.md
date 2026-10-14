@@ -158,3 +158,27 @@ forge test --match-path "test/differential/*" -vv           # Solidity vs C++ (~
 
 On Linux/macOS: `cmake -S reference-model -B reference-model/build && cmake --build
 reference-model/build && ctest --test-dir reference-model/build`, then the two `forge` commands.
+
+## 9. Follow-up: stronger input generators (added after the M8 session)
+
+Section 6 noted that the fuzzer mostly compared agreement on *failure* for the "wide" inputs and
+for `validateRiskParams`. The Solidity-side generators were improved accordingly (no change to
+the C++ model, the spec or the contracts):
+
+- In "wide" mode each argument is now either the raw fuzz value or a bounded one (decided per
+  argument by a hash of the value), so a single huge operand sits next to realistic ones instead
+  of every operand being huge. This reaches many more successful edge results.
+- Two new tests, `testFuzz_diff_validateRiskParams_nearValid` and
+  `testFuzz_diff_validateRateParams_nearValid`, generate parameter sets that are valid or wrong by
+  exactly one unit at a boundary (`LT * (1 + bonus)` just reaching 1, `ltv == LT`, `LT == WAD`,
+  `closeFactor` 0 / 1e18 / 1e18+1, bonus 0 / cap / cap+1, kink 0 / 1 / WAD-1 / WAD, rates at the
+  cap and cap+1).
+
+Result with the new generators against the unchanged C++ binary (Windows, `diff` profile):
+
+| Run | Result |
+|---|---|
+| all differential tests + `VectorsTest`, 150 fuzz runs each (`FOUNDRY_FUZZ_RUNS=150`) | 31 passed, 0 failed |
+| the two `nearValid` tests, 600 runs each | 2 passed, 0 failed |
+
+Still no mismatch. The limits in section 6 about spec-level (common-mode) errors are unchanged.
