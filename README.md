@@ -6,9 +6,9 @@ checked against an **independent C++ reference model**.
 > **Educational / portfolio project. Not audited. Never use with real funds.** Runs on mocks,
 > local Anvil, mainnet *forks* (read-only) and Sepolia only.
 >
-> **Status:** the protocol, its security pass and the demo are complete (milestones M0-M7). The
-> C++ reference model and differential tests are milestone M8, built in a separate clean
-> session so that it really is independent; see [Reference model](#reference-model).
+> **Status:** milestones M0-M8 are complete: the protocol, its security pass, the demo, and the
+> independent C++ reference model with its differential tests (built in a separate clean session so
+> that it really is independent; see [Reference model](#reference-model)).
 
 ## What it does
 
@@ -78,7 +78,7 @@ test/           unit, fuzz, scenario, invariant, fork, security, script, differe
 script/         Demo (local story), DeploySepolia (optional), Addresses (verified constants)
 docs/           DESIGN (the spec), THREAT_MODEL, ROUNDING_REVIEW, SLITHER_TRIAGE,
                 GAS_AND_COVERAGE, M8_HANDOFF
-reference-model/  the C++ model (milestone M8)
+reference-model/  the independent C++ model, its tests and CMake build (milestone M8)
 ```
 
 ## Quick start (no C++ needed)
@@ -206,9 +206,34 @@ spec is wrong.
 - **It does NOT verify**: the market's state machine, access control, token transfers, reentrancy
   or oracle behaviour. Those are covered by the unit, invariant, fork and security tests.
 
-Status: the spec, the CLI contract ([`docs/M8_HANDOFF.md`](docs/M8_HANDOFF.md)), ~1,100 test
-vectors and the Solidity side of the differential tests are done. The C++ implementation and its
-report are milestone M8.
+### What was compared
+
+25 pure functions: the whole interest-rate model, the borrow index, supplier shares, valuation,
+health factor, the LTV limit, the liquidation formulas, parameter validation, and the four market
+kernels (`accrue`, `repayAmounts`, `liquidationAmounts`, `badDebt`). For each one, Foundry fuzzes
+1,000 inputs per run, half of them realistic and half raw 256-bit values (to reach overflow,
+division by zero and 10**78), calls the Solidity and the C++ binary through `vm.ffi`, and requires
+that either both fail or both return the same words.
+
+**Result:** 0 mismatches. 25,000 fuzz comparisons per run, two runs with different seeds, plus
+1,139 shared spec vectors and the worked examples of `docs/DESIGN.md`. The tests are sensitive: an
+injected rounding bug in the C++ is caught on the first input, and an injected "evaluate lazily"
+bug within a few hundred runs. The full account, including the (non-mismatch) places where
+`DESIGN.md` was ambiguous and what the fuzzer does *not* reach, is in
+[`docs/DIFFERENTIAL_REPORT.md`](docs/DIFFERENTIAL_REPORT.md).
+
+### Build and run
+
+```bash
+cmake -S reference-model -B reference-model/build -DCMAKE_BUILD_TYPE=Release
+cmake --build reference-model/build
+ctest --test-dir reference-model/build --output-on-failure   # unit + CLI + all vectors
+./reference-model/build/refmodel utilization 3 1              # 0x...4a03ce68d215555
+FOUNDRY_PROFILE=diff forge test --match-path "test/differential/*"
+```
+
+No third-party library is needed (CMake and a C++17 compiler only); see
+[`reference-model/README.md`](reference-model/README.md) for the design and the CLI contract.
 
 ## Measured metrics
 
@@ -259,6 +284,7 @@ Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.m
 | [`docs/SLITHER_TRIAGE.md`](docs/SLITHER_TRIAGE.md) | all static-analysis findings, individually judged |
 | [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md) | commands and raw numbers behind the metrics |
 | [`docs/M8_HANDOFF.md`](docs/M8_HANDOFF.md) | CLI contract and rules for the independent C++ model |
+| [`docs/DIFFERENTIAL_REPORT.md`](docs/DIFFERENTIAL_REPORT.md) | result of the Solidity-vs-C++ comparison, spec ambiguities, limits |
 
 ## What I learned
 

@@ -21,7 +21,7 @@ model. Quality over feature count. Educational only: never real funds, never mai
 | M5 | Invariant tests + mainnet fork tests | **done** | 13 invariants; fork tests skip without `MAINNET_RPC_URL` |
 | M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | **done** | Slither ran natively in a venv (no WSL); 0 findings after triage |
 | M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **done** | demo verified on Anvil (22 txs) and in simulation; Sepolia script dry-run against live feeds |
-| M8 | C++ reference model + differential tests | **started in a fresh session** | independence rule: the model is written from `docs/DESIGN.md` only; see `docs/M8_HANDOFF.md` |
+| M8 | C++ reference model + differential tests | **done** | independent C++17 model written from `docs/DESIGN.md` only; 0 mismatches in 25,000 fuzz comparisons + 1,139 vectors; `docs/DIFFERENTIAL_REPORT.md` |
 | M9 | Monte Carlo risk simulator | stretch, only if asked | |
 
 ## 3. What exists today
@@ -55,14 +55,18 @@ model. Quality over feature count. Educational only: never real funds, never mai
 
 ## 4. Pending work
 
-### M8: C++ reference model (in progress, fresh session)
-- Reads only `docs/DESIGN.md`, `docs/M8_HANDOFF.md`, `test/differential/` and `reference-model/`
-  (no `src/` until the first differential run is done).
-- Deliverables: `reference-model/` (CMake, C++17, big-integer math), C++ unit tests incl. every
-  line of `vectors.txt`, a differential run, `docs/DIFFERENTIAL_REPORT.md` (every mismatch and
-  every DESIGN ambiguity), CI building the model before `forge test`, README "Reference model".
-- Environment: MSVC 14.41 + CMake + Ninja come with Visual Studio 2022 (no WSL needed); Boost is
-  NOT installed, so any download needs the owner's OK.
+### M8: C++ reference model (done)
+- Delivered: `reference-model/` (CMake, C++17, hand-written exact 256-bit math with a 512-bit
+  `mulDiv`, no third-party dependency), C++ unit + CLI + vector tests, CI building the model before
+  `forge test`, `docs/DIFFERENTIAL_REPORT.md`, README "Reference model".
+- Result: 0 mismatches (details and the evidence in `docs/DIFFERENTIAL_REPORT.md`).
+- Pending / deferred from M8:
+  - The CI jobs (Ubuntu GCC, Windows MSVC) were written but could not be run before the push; the
+    model was built and tested locally with MSVC only (no GCC/Clang available on the dev machine).
+  - The fuzz distribution almost never produces VALID `validateRiskParams` inputs (about 1%); that
+    success path is covered by the 30 successful vectors, not by the fuzzer.
+  - Optional: swap the hand-written test harness for Catch2 and/or the big-integer type for
+    Boost.Multiprecision (needs the owner's OK to download; not needed for correctness).
 ### Smaller follow-ups (not blocking)
 - Add Slither to CI once a Linux runner setup is confirmed (currently documented, run manually).
 - gitleaks is configured (`.gitleaks.toml`) but not installed locally nor run in CI.
@@ -86,7 +90,6 @@ model. Quality over feature count. Educational only: never real funds, never mai
 
 ## 6. Open decisions / things only the owner can do
 
-- Install WSL (`wsl --install -d Ubuntu`, admin PowerShell, reboot): needed for M8 (C++ toolchain).
 - Confirm the copyright holder name in `LICENSE` ("Franco Caccia" is a guess).
 - Decide: repo visibility (private for now), repo name, public Sepolia deploy (burner key only).
 - Decide whether to add a free public mainnet RPC as a CI secret for the fork suite (the tests
