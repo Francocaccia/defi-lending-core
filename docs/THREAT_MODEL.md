@@ -34,7 +34,7 @@ Legend for status: **Mitigated** (code + tests), **Partially**, **Not mitigated*
 | T6 | **Stablecoin depeg** | The borrow asset is priced by its own feed, never hardcoded at $1. A depeg changes debt value and can make positions liquidatable | `Liquidation.test_liquidate_becomesPossibleWhenBorrowAssetAppreciates`, `Borrow.test_borrow_usesBorrowAssetPrice_*`, fork test uses real USDC ≈ $0.9998 | Mitigated (correct valuation), but depeg risk itself remains |
 | T7 | **Oracle outage freezes the market**: while stale, nobody can borrow, withdraw debt-backed collateral or liquidate. A crash during an outage lets underwater positions accumulate | Repay, deposit, supplier exit and debt-free collateral exit keep working | `Scenarios.test_scenario_staleOracle_freezesPriceDependentActionsOnly` | Partially (bounded blast radius; liquidation stall is inherent) |
 | T8 | **L2 sequencer down / grace period** | Not applicable on L1; no sequencer-uptime feed check is implemented | none | **Not mitigated** (documented gap for L2 deployments) |
-| T9 | **Heartbeat misconfiguration** | Bounded `1s..7 days`; should be documented feed heartbeat + margin | `testFuzz_constructor_rejectsInvalidHeartbeat` | Partially (bounds only) |
+| T9 | **Heartbeat misconfiguration** (too tight: a healthy feed looks stale and the market freezes; too loose: old prices accepted) | Bounded `1s..7 days`; the configured bound is heartbeat + a deliberate margin and the numbers were verified against the feeds' real update gaps (ETH/USD max observed gap 3,744 s vs bound 4,200 s; USDC/USD 86,472 s vs 90,000 s; see DESIGN 2.3 and `script/Addresses.sol`). The Sepolia USDC/USD feed goes silent for days, so a Sepolia market can freeze (fail-closed) | `testFuzz_constructor_rejectsInvalidHeartbeat`, `MainnetFork.t.sol` | Partially (bounds enforced on-chain; correctness of the chosen value is a deployment decision) |
 
 ### Lending logic
 
@@ -57,7 +57,13 @@ Legend for status: **Mitigated** (code + tests), **Partially**, **Not mitigated*
 | T19 | **First-depositor / share-inflation attack** | Virtual shares (1e6) and assets (1); idle liquidity is accounting-based so donations do nothing | `SharesMathTest.test_inflationAttack_*`, `Supply.test_firstDepositorInflationAttackFails`, invariant donation action | Mitigated |
 | T20 | **Rounding leaks** (repeated tiny actions extracting dust) | Every conversion rounds against the user; the share price never falls except through bad debt; per-user debt rounding ≤ N-1 wei | `docs/ROUNDING_REVIEW.md`; `testFuzz_sharePriceNeverDecreasesOnSupplierActions`, invariants (b), (d); flipping the rounding direction of supply, withdraw, redeem, borrow or repay is caught by the tests (see ROUNDING_REVIEW) | Mitigated |
 | T21 | **Overflow / underflow** | Solidity 0.8 checked math; `mulDiv` with 512-bit intermediates; unrealistic inputs revert rather than wrap | fuzz ranges documented in `test/fuzz/*` | Mitigated (reverts on absurd values) |
-| T22 | **Dust positions** (debts too small to be worth liquidating) | `maxRepayable` rounds up so even a 1-wei debt can be liquidated; economically unprofitable dust can remain (gas > value) | `Liquidation.test_liquidate_dustDebtIsFullyLiquidatable` | Partially (can persist if uneconomic) |
+| T22 | **Dust positions**: there is NO minimum debt or minimum collateral, so small positions can cost more gas to liquidate than the 5% bonus pays. On Ethereum mainnet at normal gas prices a liquidation costs tens of dollars, so positions below a few hundred dollars of debt can be uneconomic for every liquidator; they then sit underwater, keep accruing interest and, if the price keeps falling, turn into bad debt that nobody liquidates (and, through T32, is not recognised). Many such positions add up. | `maxRepayable` rounds up so even a 1-wei debt CAN be liquidated by anyone willing to pay the gas, and the zero-burn rule (T13) lets a position be cleared; but there is nothing that makes it worth doing. A production market would set a minimum borrow size and/or a liquidation incentive floor | `Liquidation.test_liquidate_dustDebtIsFullyLiquidatable` (the mechanism works; economics are not tested) | **NOT mitigated in v1** (accepted limitation) |
+
+### Accounting and economics (added in the final review)
+
+| ID | Threat | Mechanism / consequence | Evidence | Status |
+|---|---|---|---|---|
+| T32 | **Late bad-debt recognition** (bank-run dynamic). Bad debt is only written off when a liquidation seizes ALL of a borrower's collateral. A deeply underwater position that still holds even a little collateral (or that nobody liquidates, see T22) is **not** written off: the debt stays in `totalBorrowAssets`, so `totalSupplyAssets` and the supplier share price stay **overstated** by the unrecognised loss. Suppliers who withdraw first are paid at the inflated price (from idle liquidity); the loss is then borne entirely by the suppliers who stay, and when the write-off finally happens the price drops. Rational suppliers therefore have an incentive to exit at the first sign of insolvency, which is a run. There is no mark-to-market haircut, no pause and no insurance fund to dampen it. | Not addressed: it would need either a solvency-aware share price (haircut for positions with HF below the bonus break-even `1 / (LT x (1 + bonus))`) or a first-loss reserve. The behaviour is visible in the tests (`Liquidation.test_badDebt_*`: the loss appears only at the final liquidation) but is not tested as a run | **NOT mitigated in v1** (documented design limitation) |
 
 ### Execution environment
 
@@ -83,6 +89,8 @@ Legend for status: **Mitigated** (code + tests), **Partially**, **Not mitigated*
 5. Fee-on-transfer, rebasing and hook tokens as the *market's own* assets; token blacklists/pauses.
 6. Parameter/oracle mistakes at deployment (immutability cuts both ways).
 7. Economic attacks that need real capital (e.g. a whale pushing utilization to 100%).
+8. **Late bad-debt recognition (T32):** losses are recognised only when a liquidation exhausts a borrower's collateral, so the share price is overstated meanwhile and early withdrawers shift the loss to those who stay.
+9. **Dust positions (T22):** no minimum debt; small positions can be uneconomic to liquidate once real gas costs exceed the bonus, so bad debt can accumulate unseen.
 
 ## 4. How the claims are tested
 
