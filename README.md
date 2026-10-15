@@ -10,6 +10,10 @@ checked against an **independent C++ reference model**.
 > independent C++ reference model with its differential tests (built in a separate clean session so
 > that it really is independent; see [Reference model](#reference-model)).
 
+- **What it is:** a small, security-focused over-collateralized lending protocol: supply and borrow with a compounding borrow index, Chainlink-based health factors and liquidations, with bad debt recorded explicitly.
+- **What makes it different:** its math is re-implemented independently in C++ (written from the spec only) and compared with the Solidity on fuzzed inputs, with 100% measured line and branch coverage of `src/` and hand-run mutation checks that confirm the tests actually catch bugs.
+- **See it work:** `forge script script/Demo.s.sol --sig "runWithInterest()"` replays supply, borrow, an ETH crash, liquidation and bad debt on mock feeds (see [the demo](#see-it-work-the-demo)).
+
 ## What it does
 
 One market, one collateral asset (WETH, 18 decimals) and one borrow/supply asset (USDC-like,
@@ -190,7 +194,7 @@ The full reasoning is in [`docs/DESIGN.md`](docs/DESIGN.md); the highlights:
 | **Reentrancy** | a hostile ERC-777-style token calling back on every transfer cannot re-enter any function; views are already final during callbacks |
 | **Demo + vectors** | the demo cannot rot (it is a test); ~1,100 spec vectors from an independent implementation match the Solidity |
 | Mutation checks (by hand) | injected bugs are caught: 18/18 in the market's unit tests, 11/11 by the invariant suite alone, 8/8 reentrancy guards |
-| Static analysis | Slither: 41 raw findings, 0 after documented triage |
+| Static analysis | Slither: 41 raw findings: 0 fixed (none was a defect), 19 false positives, 22 accepted with written justification ([`docs/SLITHER_TRIAGE.md`](docs/SLITHER_TRIAGE.md)) |
 
 ## Reference model
 
@@ -246,7 +250,7 @@ Foundry 1.8.5, solc 0.8.28. Commands and details: [`docs/GAS_AND_COVERAGE.md`](d
 | Tests with a mainnet RPC configured | 284 passed, 0 failed, 1 skipped (differential) |
 | Invariant properties (random action sequences, 5 actors) | 13, all hold; one campaign reached 53 liquidations and 13 bad-debt events |
 | Line / statement / branch / function coverage of `src/` | 100% (297/297), 100% (381/381), 100% (61/61), 100% (54/54) |
-| Slither (scope `src/`) | 0 findings after documented triage (41 raw) |
+| Slither (scope `src/`) | 41 raw: 0 fixed, 19 false positives, 22 accepted with justification |
 | `LendingMarket` runtime size | 9,386 bytes |
 
 Gas per function (median, unit/scenario tests, fresh storage; see caveats in the docs): `supply`

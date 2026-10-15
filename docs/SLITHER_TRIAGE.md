@@ -22,8 +22,16 @@ Re-run after the M7 refactor (accrual / repay / liquidation / bad-debt kernels m
 | First run, default config | **41** (0 High, 10 Medium, 13 Low, 18 Informational) |
 | After documented triage (9 inline suppression blocks covering the 10 Medium findings, 2 detectors excluded in config) | **0** |
 
-Every finding below was read and judged individually. No finding was a vulnerability. Nothing
-was "fixed" by changing logic; the contract code was left unchanged except for comments.
+### Outcome of the 41 raw findings
+
+| Outcome | Count | Which |
+|---|---|---|
+| **Fixed** (code changed) | **0** | none was a defect; only explanatory comments and suppressions were added |
+| **False positives** | **19** | 9 `incorrect-equality` (zero checks on derived accounting values, not balances) + 10 `timestamp` hits that are taint propagation from `_accrue()` |
+| **Accepted, with justification** | **22** | 1 `unused-return` (`startedAt` intentionally ignored) + 3 `timestamp` (the genuine time uses: interest accrual and oracle staleness) + 18 `naming-convention` (UPPER_CASE immutables, style only) |
+
+Every finding was read and judged individually. No finding was a vulnerability. Nothing was "fixed"
+by changing logic; the contract code was left unchanged except for comments.
 
 ## Medium: `incorrect-equality` (9) — suppressed inline, justified
 
@@ -61,7 +69,7 @@ genuine uses of time are exactly two, both intended:
    proposer can skew the timestamp by seconds, which changes interest by a negligible amount.
 2. **Oracle staleness** (`now - updatedAt > heartbeat`). Heartbeats are minutes to days.
 
-The other 11 hits are taint propagation: functions like `borrow`, `_withdraw`, `repay` and
+The 13 reported functions are 3 with a genuine time comparison (`_accrue`, `_currentIndex` and `ChainlinkOracle.price`) and 10 further hits that are taint propagation: functions like `borrow`, `_withdraw`, `repay` and
 `liquidate` call `_accrue()` first, so *later* comparisons on accounting values (e.g.
 `assets > available`) are reported as "timestamp-dependent". The comparisons themselves do not
 depend on the clock. The `block-timestamp` lint in Foundry is silenced with a comment at the two
