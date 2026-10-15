@@ -1,11 +1,11 @@
 {
   "name": "dust_positions",
-  "description": "Threat T22 (dust positions) made quantitative. A tiny position (0.01 ETH of collateral) is opened at the max-LTV limit and a liquidator only acts when the debt is worth at least 25 USD (a stand-in for the gas cost of a liquidation call). What fraction of the windows end with an unhealthy position that nobody liquidates ('stuck')? The protocol has NO minimum borrow size in v1, which is why this is documented as not mitigated.",
+  "description": "Threat T22 (dust positions) made quantitative. A small position (40 USD of ETH collateral, so 30 USD of debt at the max-LTV limit) and a liquidator that only acts when the debt is worth at least 25 USD (a stand-in for the gas cost of a liquidation call). The first liquidation repays up to the close factor and can leave a residual debt below the threshold that nobody will ever liquidate. How often does that happen, and how often is such a stuck position also insolvent (debt worth more than its collateral)? The protocol has no minimum borrow size in v1, which is why this is documented as not mitigated.",
   "data": { "eth": "../data/eth_usd_chainlink.csv", "usdc": "../data/usdc_usd_chainlink.csv" },
   "stepSeconds": 3600,
   "source": { "type": "historical", "horizonDays": [90, 365], "startStrideDays": 1 },
   "market": { "utilization": "0.8" },
-  "borrower": { "collateralEth": "0.01", "ltvFractionOfMax": ["1.0"] },
+  "borrower": { "collateralUsd": "40", "ltvFractionOfMax": ["1.0"] },
   "liquidator": { "latencyHours": [0], "minDebtUsd": "25" },
   "defaultRate": { "baseRate": "0", "slope1": "0.04", "slope2": "0.75", "optimalUtilization": "0.8" },
   "variants": [

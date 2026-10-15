@@ -75,7 +75,9 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
   } else {
     o << "- **USDC/USD:** assumed to be exactly $1.00 throughout (no feed data).\n";
   }
-  o << "- **Position:** " << formatScaled(cfg.collateralWei, 18, 4) << " ETH collateral, opened at a stated "
+  o << "- **Position:** " << (cfg.collateralUsd.isZero() ? formatScaled(cfg.collateralWei, 18, 4) + " ETH"
+                                                      : "$" + formatScaled(cfg.collateralUsd, 18, 2) + " worth of ETH (at the opening price)")
+    << " collateral, opened at a stated "
     << "fraction of the max-LTV limit; passive borrower (no top-ups, no repayments).\n";
   o << "- **Market:** utilization held at " << pct(toDouble(cfg.utilization) / 1e18, 0)
     << " to price interest (a single position does not move the market).\n";
@@ -91,9 +93,10 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
     o << "## Results, " << h << "-day horizon\n\n";
     o << "`variant` is `maxLTV / liquidation threshold / bonus`; `start LTV` is the absolute LTV at opening; "
          "`latency` is the liquidator's delay. Bad debt is the supplier loss as a percentage of the position's initial debt. "
-         "`stuck` counts runs where the position became unhealthy but nobody could or would liquidate it (debt below the "
-         "liquidator's minimum).\n\n";
-    o << "| variant | max LTV / LT / bonus | start LTV | latency | N | liquidated [95% CI] | bad debt (runs) | bad debt %, mean / p99 / max | stuck |"
+         "`stuck` counts runs where the position was unhealthy at least once but nobody could or would liquidate it (debt below the "
+         "liquidator's minimum); the number in brackets is how many of those were also insolvent (debt worth more than the collateral) at "
+         "that moment: a loss nobody has recognised.\n\n";
+    o << "| variant | max LTV / LT / bonus | start LTV | latency | N | liquidated [95% CI] | bad debt (runs) | bad debt %, mean / p99 / max | stuck (insolvent) |"
       << (hist ? " episodes |" : "") << "\n";
     o << "|---|---|---|---|---|---|---|---|---|" << (hist ? "---|" : "") << "\n";
     for (const Row& r : rows) {
@@ -102,7 +105,7 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
         << r.n << " | " << pct(static_cast<double>(r.liquidated) / static_cast<double>(r.n), 1) << " ["
         << pct(r.pLiquidated.lo, 1) << ", " << pct(r.pLiquidated.hi, 1) << "] | " << r.badDebt << " ("
         << pct(static_cast<double>(r.badDebt) / static_cast<double>(r.n), 2) << ") | " << pct(r.badMean, 3) << " / "
-        << pct(r.badP99, 2) << " / " << pct(r.badMax, 1) << " | " << r.stuck << " |";
+        << pct(r.badP99, 2) << " / " << pct(r.badMax, 1) << " | " << r.stuck << " (" << r.stuckUnderwater << ") |";
       if (hist) o << " " << r.episodes << " |";
       o << "\n";
     }
@@ -154,7 +157,7 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
 std::string renderCsv(const std::vector<Row>& rows) {
   std::ostringstream o;
   o << "horizonDays,variant,maxLtv,liquidationThreshold,liquidationBonus,closeFactor,ltvFraction,initialLtv,latencyHours,"
-       "n,unhealthy,liquidated,pLiquidated,pLiquidatedLo,pLiquidatedHi,badDebt,pBadDebt,stuck,episodes,"
+       "n,unhealthy,liquidated,pLiquidated,pLiquidatedLo,pLiquidatedHi,badDebt,pBadDebt,stuck,stuckUnderwater,episodes,"
        "meanLiquidations,meanBorrowerCostPct,badMean,badP99,badMax,badCondMedian,medianMinHf,byYear\n";
   for (const Row& r : rows) {
     o << r.horizonDays << "," << r.variant << "," << fmt("%.4f", r.maxLtv) << "," << fmt("%.4f", r.liquidationThreshold) << ","
@@ -162,7 +165,7 @@ std::string renderCsv(const std::vector<Row>& rows) {
       << fmt("%.6f", r.initialLtv) << "," << r.latencyHours << "," << r.n << "," << r.unhealthy << "," << r.liquidated << ","
       << fmt("%.6f", static_cast<double>(r.liquidated) / static_cast<double>(r.n)) << "," << fmt("%.6f", r.pLiquidated.lo) << ","
       << fmt("%.6f", r.pLiquidated.hi) << "," << r.badDebt << ","
-      << fmt("%.6f", static_cast<double>(r.badDebt) / static_cast<double>(r.n)) << "," << r.stuck << "," << r.episodes << ","
+      << fmt("%.6f", static_cast<double>(r.badDebt) / static_cast<double>(r.n)) << "," << r.stuck << "," << r.stuckUnderwater << "," << r.episodes << ","
       << fmt("%.4f", r.meanLiquidations) << "," << fmt("%.6f", r.meanBorrowerCostPct) << "," << fmt("%.8f", r.badMean) << ","
       << fmt("%.8f", r.badP99) << "," << fmt("%.8f", r.badMax) << "," << fmt("%.8f", r.badCondMedian) << ","
       << fmt("%.6f", r.medianMinHf) << ",";

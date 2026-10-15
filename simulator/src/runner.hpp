@@ -31,6 +31,7 @@ struct Row {
   std::size_t liquidated = 0;
   std::size_t badDebt = 0;
   std::size_t stuck = 0;
+  std::size_t stuckUnderwater = 0;  // stuck runs whose debt exceeded the collateral value at some point
   std::size_t episodes = 0;      // historical only: distinct crash episodes behind liquidated windows
   Interval pLiquidated;
   Interval pBadDebt;

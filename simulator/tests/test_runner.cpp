@@ -5,6 +5,7 @@
 #include "report.hpp"
 #include "runner.hpp"
 #include "simtest.hpp"
+#include "units.hpp"
 
 using namespace sim;
 
@@ -126,4 +127,23 @@ TEST(runner_isoDate_is_correct) {
   CHECK_EQ(isoDate(1582934400), std::string("2020-02-29"));
   CHECK_EQ(isoDate(1600000000), std::string("2020-09-13"));
   CHECK_EQ(isoDate(1609459199), std::string("2020-12-31"));
+}
+
+TEST(runner_a_position_sized_in_dollars_behaves_like_the_equivalent_amount_of_eth) {
+  // The mechanics are scale free: 20,000 USD of ETH is 10 ETH at $2,000 and 20 ETH at $1,000, and in
+  // both cases health depends only on prices and the borrowed fraction, so the outcomes must agree.
+  const Grid g = syntheticGrid();
+  const char* source = R"({"type": "historical", "horizonDays": 30, "startStrideDays": 1})";
+  const Config inEth = smallConfig(source);
+  Config inUsd = smallConfig(source);
+  inUsd.collateralWei = U256(0);
+  inUsd.collateralUsd = parseDecimalScaled("20000", 18);
+  const std::vector<Row> a = runExperiment(inEth, g, nullptr);
+  const std::vector<Row> b = runExperiment(inUsd, g, nullptr);
+  CHECK_EQ(a.size(), b.size());
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    CHECK_EQ(a[i].liquidated, b[i].liquidated);
+    CHECK_EQ(a[i].unhealthy, b[i].unhealthy);
+    CHECK_EQ(a[i].badDebt, b[i].badDebt);
+  }
 }

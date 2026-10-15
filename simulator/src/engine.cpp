@@ -115,6 +115,7 @@ RunResult Engine::run(const PositionSpec& spec, const PolicyParams& policy,
 
     if (!policy.minDebtValueUsd.isZero() && debtValue < policy.minDebtValueUsd) {
       r.stuck = true;  // not worth the gas for anyone: the position just stays unhealthy
+      if (debtValue > collValue) r.stuckUnderwater = true;
       continue;
     }
 
@@ -125,6 +126,7 @@ RunResult Engine::run(const PositionSpec& spec, const PolicyParams& policy,
     const bool takesAll = lq.seized == coll;
     if (lq.repaid.isZero() || lq.seized.isZero() || (lq.burned.isZero() && !takesAll)) {
       r.stuck = true;
+      if (debtValue > collValue) r.stuckUnderwater = true;
       continue;
     }
 

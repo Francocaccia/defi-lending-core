@@ -36,7 +36,10 @@ struct Config {
   std::int64_t stepSeconds = 3600;
   SourceSpec source;
   U256 utilization;                         // WAD
-  U256 collateralWei;
+  U256 collateralWei;                        // fixed amount of ETH collateral (collateralEth)
+  U256 collateralUsd;                        // WAD USD; when non-zero (collateralUsd) the collateral is this many
+                                             // dollars of ETH at the opening price, so the position SIZE in dollars
+                                             // does not depend on where the price was when the window started
   std::vector<std::string> ltvFractionText;  // as written, for the report
   std::vector<U256> ltvFractions;            // WAD fractions of the max-LTV limit
   std::vector<int> latencyHours;

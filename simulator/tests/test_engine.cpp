@@ -122,8 +122,21 @@ TEST(engine_dust_filter_leaves_an_unhealthy_position_alone) {
   const RunResult r = run(defaults(), demoPosition(), 0, {usd(2000), usd(1200), usd(300)}, 3600, oneMillionUsd);
   CHECK(r.everUnhealthy);
   CHECK(r.stuck);
+  CHECK(r.stuckUnderwater);  // by the last step 10 WETH ($3,000) no longer cover the 10,000 USDC debt
   CHECK(!r.liquidated);
   CHECK(!r.badDebt);
+}
+
+TEST(engine_a_stuck_position_is_flagged_insolvent_only_once_debt_exceeds_collateral) {
+  const U256 oneMillionUsd = parseDecimalScaled("1000000", 18);
+  // 2000 -> 1200: health factor 0.96 (unhealthy) but 10 WETH = $12,000 still covers the $10,000 debt.
+  const RunResult shallow = run(defaults(), demoPosition(), 0, {usd(2000), usd(1200)}, 3600, oneMillionUsd);
+  CHECK(shallow.stuck);
+  CHECK(!shallow.stuckUnderwater);
+  // A position that is liquidated normally never counts as stuck.
+  const RunResult normal = run(defaults(), demoPosition(), 0, {usd(2000), usd(1200)});
+  CHECK(!normal.stuck);
+  CHECK(!normal.stuckUnderwater);
 }
 
 TEST(engine_opening_respects_the_max_ltv_limit_exactly) {

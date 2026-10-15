@@ -1,0 +1,46 @@
+{
+  "proxy": "0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6",
+  "chainId": 1,
+  "fetchedAtUtc": "2026-10-15 14:17",
+  "rpcHosts": [
+    "eth.drpc.org",
+    "eth.llamarpc.com",
+    "ethereum-rpc.publicnode.com"
+  ],
+  "rows": 3310,
+  "first": "2021-02-17 18:10",
+  "last": "2026-10-15 08:41",
+  "droppedDuplicatesOrInvalid": 1,
+  "phases": [
+    {
+      "phase": 1,
+      "aggregator": "0x3b15a92872435c01c27201aae0968839fb45217d",
+      "rounds": 295,
+      "first": "2021-02-17 18:10",
+      "last": "2021-12-08 16:36"
+    },
+    {
+      "phase": 2,
+      "aggregator": "0x789190466e21a8b78b8027866cbbdc151542a26c",
+      "rounds": 1773,
+      "first": "2021-04-01 12:16",
+      "last": "2024-09-10 08:00"
+    },
+    {
+      "phase": 3,
+      "aggregator": "0xc9e1a09622afdb659913fefe800feae5dbbfe9d7",
+      "rounds": 1210,
+      "first": "2024-06-28 05:32",
+      "last": "2026-09-23 08:00"
+    },
+    {
+      "phase": 4,
+      "aggregator": "0x54bcc589d9743e521c64233706fc8cb36d275b07",
+      "rounds": 33,
+      "first": "2026-09-14 21:15",
+      "last": "2026-10-15 08:41"
+    }
+  ],
+  "overlapMaxRelativeGapWithin10min": 0.0,
+  "csvSha256": "27709eb2cf8a491eeb4e56e766119c21cb1b175f16a4880dab53d466918dc5f8"
+}

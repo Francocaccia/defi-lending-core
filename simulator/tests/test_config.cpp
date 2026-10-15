@@ -72,6 +72,18 @@ TEST(config_rejects_missing_and_nonsensical_fields) {
   CHECK_THROWS_ANY(parseConfig(parseJson(replaceOnce(kMinimal, R"("latencyHours": [0, 6])", R"("latencyHours": [-1])")), "."));
 }
 
+TEST(config_collateral_can_be_sized_in_dollars_but_exactly_one_way) {
+  const std::string usd = replaceOnce(kMinimal, R"("collateralEth": "10")", R"("collateralUsd": "40")");
+  const Config c = parseConfig(parseJson(usd), ".");
+  CHECK_EQ(c.collateralUsd, parseDecimalScaled("40", 18));
+  CHECK(c.collateralWei.isZero());
+  // Both, or neither, or a zero amount are rejected.
+  CHECK_THROWS_ANY(parseConfig(parseJson(replaceOnce(kMinimal, R"("collateralEth": "10")",
+                                                     R"("collateralEth": "10", "collateralUsd": "40")")), "."));
+  CHECK_THROWS_ANY(parseConfig(parseJson(replaceOnce(kMinimal, R"("collateralEth": "10", )", "")), "."));
+  CHECK_THROWS_ANY(parseConfig(parseJson(replaceOnce(kMinimal, R"("collateralEth": "10")", R"("collateralEth": "0")")), "."));
+}
+
 TEST(config_bootstrap_source_fields) {
   const std::string j = replaceOnce(
       kMinimal, R"({ "type": "historical", "horizonDays": [30, 90], "startStrideDays": 2 })",

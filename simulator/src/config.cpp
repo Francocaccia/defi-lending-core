@@ -118,7 +118,16 @@ Config parseConfig(const Json& root, const std::string& baseDir) {
   if (c.utilization > refmodel::WAD) throw std::runtime_error("config: utilization must be <= 1");
 
   const Json& borrower = root.at("borrower");
-  c.collateralWei = parseDecimalScaled(borrower.at("collateralEth").str(), 18);
+  const Json* ethAmount = borrower.find("collateralEth");
+  const Json* usdAmount = borrower.find("collateralUsd");
+  if ((ethAmount == nullptr) == (usdAmount == nullptr)) {
+    throw std::runtime_error("config: borrower needs exactly one of collateralEth or collateralUsd");
+  }
+  if (ethAmount != nullptr) c.collateralWei = parseDecimalScaled(ethAmount->str(), 18);
+  if (usdAmount != nullptr) c.collateralUsd = parseDecimalScaled(usdAmount->str(), 18);
+  if (c.collateralWei.isZero() && c.collateralUsd.isZero()) {
+    throw std::runtime_error("config: the collateral amount must be positive");
+  }
   c.ltvFractionText = borrower.at("ltvFractionOfMax").strList();
   for (const std::string& f : c.ltvFractionText) {
     const U256 v = parseWadParam(f);

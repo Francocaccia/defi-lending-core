@@ -59,6 +59,8 @@ struct RunResult {
   bool badDebt = false;         // collateral exhausted with debt left (written off)
   bool closed = false;          // position fully repaid or written off before the horizon
   bool stuck = false;           // unhealthy but not liquidated (dust filter / nothing to liquidate)
+  bool stuckUnderwater = false; // ... and at that moment the debt was worth MORE than the collateral
+                                // (a loss nobody has recognised: bad debt that is not written off)
   std::uint32_t liquidations = 0;
   double initialDebtUsdc = 0.0;
   double initialCollateralUsd = 0.0;  // collateral value at opening (oracle price)

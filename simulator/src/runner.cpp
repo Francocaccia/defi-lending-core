@@ -62,6 +62,7 @@ Row aggregate(const std::vector<RunResult>& runs, const std::vector<std::size_t>
     const RunResult& r = runs[i];
     if (r.everUnhealthy) ++row.unhealthy;
     if (r.stuck) ++row.stuck;
+    if (r.stuckUnderwater) ++row.stuckUnderwater;
     badAll.push_back(r.badDebtFraction);
     minHf.push_back(r.minHealthFactor);
     if (r.liquidated) {
@@ -163,6 +164,11 @@ std::vector<Row> runExperiment(const Config& cfg, const Grid& grid, Progress* pr
       for (std::size_t c = 0; c < combos.size(); ++c) {
         PositionSpec spec;
         spec.collateralWei = cfg.collateralWei;
+        if (!cfg.collateralUsd.isZero()) {
+          // dollars -> wei of ETH at the opening oracle price (rounded down)
+          spec.collateralWei = refmodel::mulDiv(cfg.collateralUsd, refmodel::WAD,
+                                                U256(eth[0]) * U256(10000000000ULL));
+        }
         spec.ltvFractionOfMax = cfg.ltvFractions[combos[c].fraction];
         PolicyParams policy;
         policy.latencySteps = static_cast<std::size_t>(cfg.latencyHours[combos[c].latency]) *
