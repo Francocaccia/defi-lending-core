@@ -4,9 +4,8 @@ This document is the **specification** of the protocol math. The C++ reference m
 implemented from this file alone, so every formula here is exact: integer arithmetic only,
 explicit units, explicit rounding direction.
 
-Status legend: **[implemented]** = in `src/` and tested. **[planned]** = specified so the spec
-does not drift; implemented in the named milestone, and the text is updated if the
-implementation reveals a flaw.
+Everything in this document is implemented in `src/` and covered by tests (the C++ reference model
+is written from it and compared against the Solidity; see `docs/DIFFERENTIAL_REPORT.md`).
 
 ## 0. Conventions
 
@@ -38,7 +37,7 @@ Always round **in favour of the protocol** (solvency), i.e. against the user:
   **down**, because the interest suppliers earn is by construction exactly the increase in the
   borrowers' derived total debt (section 5.2), so rounding the rate cannot create a deficit.
 
-## 1. Asset model [implemented]
+## 1. Asset model
 - Collateral asset: 18 decimals (WETH in the illustrative setup). Borrow/supply asset: 6
   decimals (USDC-like). The code is generic in token decimals `0..18`; `10**decimals` appears in
   the valuation and liquidation formulas.
@@ -47,7 +46,7 @@ Always round **in favour of the protocol** (solvency), i.e. against the user:
 - Idle cash is the ACCOUNTING figure `liquidity = max(0, totalSupplyAssets - totalBorrowAssets)`,
   never `balanceOf`, so a direct token donation to the contract changes no price or ratio.
 
-## 2. Oracle [implemented]
+## 2. Oracle
 
 One oracle instance per asset: `price()` returns the USD price of **one whole token**
 (`10**tokenDecimals` base units) scaled to 18 decimals.
@@ -76,19 +75,37 @@ result of `latestRoundData()`.
 7. `answer * scale` does not overflow (else `PriceOverflow`).
 
 ### 2.3 Configuration (immutable)
-`heartbeat` must satisfy `1 <= heartbeat <= 7 days` (sanity guard against unit mistakes). The
-configured value should be the feed's documented heartbeat plus a small margin. Mainnet
-feeds used (see `script/Addresses.sol` for addresses and sources): ETH/USD heartbeat 3600 s,
-USDC/USD heartbeat 82 800 s.
+`heartbeat` (the staleness bound) must satisfy `1 <= heartbeat <= 7 days` (sanity guard against unit
+mistakes). Rule: **configured bound = the feed's heartbeat + a deliberate margin**, because feeds are
+routinely a little late. Addresses and the verified numbers live in `script/Addresses.sol`
+(`*_ORACLE_MAX_AGE` are the values to pass to `ChainlinkOracle`).
 
-### 2.4 Valuation (consumers of the price) [implemented]
+Verification of the feeds actually used (2026-10-15):
+
+| Feed (mainnet) | Registry heartbeat | Measured from the feed's own on-chain rounds | Configured bound |
+|---|---|---|---|
+| ETH/USD `0x5f4e...8419` | 3,600 s (deviation 0.5%) | last 3,000 rounds: median 3,600 s, **max 3,744 s** | 3,600 + 600 = **4,200 s** |
+| USDC/USD `0x8fFf...18f6` | 82,800 s = 23 h (deviation 0.25%) | current phase: 82,824-82,836 s; previous phase (2024-06 to 2026-09): up to **86,472 s** (a 24 h heartbeat) | 86,400 + 3,600 = **90,000 s** |
+| Sepolia ETH/USD `0x694A...5306` | 3,600 s | median 3,636 s, max 3,732 s | 3,600 + 600 = 4,200 s |
+| Sepolia USDC/USD `0xA2F7...270E` | 86,400 s | median 86,424 s but gaps up to **413,496 s (4.8 days)** | 86,400 + 3,600 s (the feed can still go stale for days) |
+
+Sources: Chainlink's feed registry JSON that backs docs.chain.link
+(`reference-data-directory.vercel.app/feeds-mainnet.json` and `...-ethereum-testnet-sepolia.json`) for
+the heartbeats and thresholds; the data.chain.link feed pages confirm the thresholds but show only a live
+countdown, not the configured interval, so the interval was cross-checked by measuring real update gaps.
+For USDC/USD the bound deliberately covers the 24 h heartbeat the feed had until 2026-09 as well as
+today's 23 h one. A stablecoin depeg also triggers a deviation update, so the bound is not what protects
+against a price move. (86,400 s is also the registry heartbeat of the separate "Aave SVR" USDC/USD
+proxies, which are NOT the feed used here.)
+
+### 2.4 Valuation (consumers of the price)
 ```
 collateralValueUsd(amount, priceWad, dec) = mulDiv  (amount, priceWad, 10**dec)   // floor
 debtValueUsd      (amount, priceWad, dec) = mulDivUp(amount, priceWad, 10**dec)   // ceil
 ```
 Both results are WAD-scaled USD; `dec` is the token's decimals.
 
-## 3. Interest rate model [implemented]
+## 3. Interest rate model
 
 Parameters (all annual, WAD-scaled): `baseRate`, `slope1`, `slope2`, `optimalUtilization = K`.
 
@@ -139,7 +156,7 @@ With `baseRate=0.01e18` the annual rates are `0.01, 0.03, 0.05, 0.425, 0.80` (e1
 Floor case: `slope1=10, slope2=0, K=0.8e18, u=0.1e18` -> `10*0.1e18/0.8e18 = 1.25` -> `1`.
 `utilization(3, 1) = 333333333333333333`, `utilization(3, 2) = 666666666666666666`.
 
-## 4. Supplier share accounting [implemented]
+## 4. Supplier share accounting
 
 Supplier shares use **virtual shares/assets** to defeat the first-depositor inflation attack
 (an attacker mints 1 wei of shares then donates assets to make later deposits round to zero).
@@ -172,7 +189,7 @@ Properties (tested): deposit-then-redeem never returns more than deposited; burn
 `toSharesUp(a)` always covers a withdrawal of `a`; the share price
 `(A + VA) / (S + VS)` never decreases through supply, withdraw or redeem.
 
-## 5. Borrow index and scaled debt [implemented]
+## 5. Borrow index and scaled debt
 
 ### 5.1 State
 ```
@@ -228,7 +245,7 @@ market, up to unrecorded donations). Every operation preserves it: borrow lowers
 raises derived debt by `>= a`; repay raises cash by `p` and lowers derived debt by `<= p`;
 accrual raises both sides by `interest`.
 
-## 6. Risk parameters, health factor and borrow limits [implemented]
+## 6. Risk parameters, health factor and borrow limits
 
 Illustrative defaults (immutable): `maxLtv = 0.75e18`, `liquidationThreshold = LT = 0.80e18`,
 `liquidationBonus = 0.05e18`, `closeFactor = 0.50e18`.
@@ -264,7 +281,7 @@ debt (a user with no debt skips the oracle entirely). Using `maxLtv` (not `LT`) 
 prevents withdrawing into a position that any price tick makes liquidatable. Within the limit
 implies `HF >= 1` because `maxLtv < LT`.
 
-## 7. Liquidation and bad debt [implemented]
+## 7. Liquidation and bad debt
 
 ### 7.1 Eligibility and the repay cap
 A borrower with debt `D` (after accrual) is liquidatable iff `healthFactor < WAD` (6.2) using
@@ -326,7 +343,7 @@ impossible. Worked example (independent): ETH = $500, standard position (10 ETH,
 reserve and only then socialize; v1 has no admin, no reserve factor and no fund. See
 docs/THREAT_MODEL.md.
 
-## 8. Operations, ordering and oracle dependence [implemented]
+## 8. Operations, ordering and oracle dependence
 
 Every state-changing function is `nonReentrant` and follows: (1) accrue interest, (2) checks,
 (3) storage effects, (4) token transfers last.
@@ -344,7 +361,7 @@ A stale or invalid oracle therefore freezes exactly the actions that extend cred
 collateral against a price; deposits, repayments, supplier exits and debt-free collateral exits
 keep working.
 
-## 9. Function catalogue for the reference model [implemented]
+## 9. Function catalogue for the reference model
 
 Every function below is a PURE function of its arguments (no storage, no time, no oracle). The
 reference model implements exactly these, with the same name and the same argument order, and must

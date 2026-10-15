@@ -34,9 +34,11 @@ import {Addresses} from "./Addresses.sol";
 contract DeploySepolia is Script {
     uint256 internal constant SEPOLIA_CHAIN_ID = 11_155_111;
 
-    // Heartbeat = documented feed heartbeat + a safety margin (feeds may be a little late).
-    uint256 internal constant ETH_HEARTBEAT = Addresses.SEPOLIA_ETH_USD_HEARTBEAT + 10 minutes;
-    uint256 internal constant USDC_HEARTBEAT = Addresses.SEPOLIA_USDC_USD_HEARTBEAT + 1 hours;
+    // Staleness bound = documented heartbeat + a deliberate margin (see Addresses.sol). NOTE: the
+    // Sepolia USDC/USD feed has been observed to go silent for up to 4.8 days, so the oracle can
+    // legitimately revert with `Oracle__StalePrice` there; that is fail-closed behaviour, not a bug.
+    uint256 internal constant ETH_HEARTBEAT = Addresses.SEPOLIA_ETH_USD_ORACLE_MAX_AGE;
+    uint256 internal constant USDC_HEARTBEAT = Addresses.SEPOLIA_USDC_USD_ORACLE_MAX_AGE;
 
     function run() external returns (LendingMarket market) {
         require(block.chainid == SEPOLIA_CHAIN_ID, "DeploySepolia: Sepolia only");

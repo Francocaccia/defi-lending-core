@@ -54,9 +54,9 @@ contract MainnetForkTest is Test {
         vm.selectFork(vm.createFork(rpc));
         vm.rollFork(block.number - 25);
 
-        // Heartbeat = documented heartbeat + safety margin (see Addresses.sol for the source).
-        ethOracle = new ChainlinkOracle(ETH_FEED, Addresses.MAINNET_ETH_USD_HEARTBEAT + 10 minutes);
-        usdcOracle = new ChainlinkOracle(USDC_FEED, Addresses.MAINNET_USDC_USD_HEARTBEAT + 1 hours);
+        // Staleness bounds = heartbeat + a deliberate margin (evidence in Addresses.sol).
+        ethOracle = new ChainlinkOracle(ETH_FEED, Addresses.MAINNET_ETH_USD_ORACLE_MAX_AGE);
+        usdcOracle = new ChainlinkOracle(USDC_FEED, Addresses.MAINNET_USDC_USD_ORACLE_MAX_AGE);
 
         market = new LendingMarket(
             LendingMarket.MarketParams({
