@@ -39,7 +39,11 @@ One passive borrower position on one market, replayed over a price path:
    collateral plus bonus, repeating on later observations. If collateral runs out with debt left, the rest is
    written off as **bad debt** (the supplier loss).
 5. Optional **minimum debt** a liquidator bothers with (a stand-in for gas): positions below it stay
-   unhealthy and are counted as `stuck` (threat T22).
+   unhealthy and are counted as `stuck` (threat T22). The report also shows how many of those were
+   **insolvent** (debt worth more than the collateral): a loss nobody has recognised.
+
+The position is sized either as `collateralEth` (a fixed amount of ETH) or as `collateralUsd` (dollars of ETH
+at the opening price, so its size does not depend on where the price was when the window started).
 
 ## Price sources
 
@@ -74,7 +78,20 @@ invalid parameter set is rejected by name instead of simulated. See `configs/`.
 | `historical_baseline.json` | Default parameters over every rolling window; leverage x liquidator latency. |
 | `bootstrap_baseline.json` | Same, on synthetic paths (probes crashes the sample does not contain). |
 | `parameter_sweep.json` | Six parameter sets on the same history: LTV / threshold gap, bonus, close factor. |
-| `dust_positions.json` | Tiny positions below a liquidator's minimum: how often do they get stuck? (T22) |
+| `dust_positions.json` | A 40 USD position and a liquidator that ignores debts under 25 USD: how often do positions get stuck, and how often are they also insolvent? (T22) |
+
+## Checking the engine independently
+
+`tools/crosscheck.py` re-runs a historical experiment with a second implementation written from
+`docs/DESIGN.md` section 9 in plain Python (arbitrary-precision integers) and compares the per-combination
+counts with the simulator's CSV. It shares no code with the C++ engine or the reference model, inspects every
+hour exactly (the C++ engine skips obviously healthy hours with a floating-point screen) and accrues interest
+every hour (the C++ engine accrues lazily).
+
+```bash
+simulator/build/defi_sim run simulator/configs/historical_baseline.json --out out --quiet
+python simulator/tools/crosscheck.py simulator/configs/historical_baseline.json out/historical_baseline.csv 30 1.0:0 1.0:24
+```
 
 Results and their interpretation: [`../docs/RISK_SIMULATION.md`](../docs/RISK_SIMULATION.md).
 
