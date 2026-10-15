@@ -140,9 +140,8 @@ the Solidity by `forge test --match-contract VectorsTest` (a plain default-profi
 7. **PLAN.md**: mark M8 done and record what is pending. The private (git-ignored)
    `PORTFOLIO_NOTES.md`: add the licenses of the libraries you used (Boost, Catch2, ...).
 8. Small conventional commits, in English. The local git identity of this repo is already the
-   GitHub noreply address; do not change it. End each commit message with the
-   `Co-Authored-By` line your session instructions give. Pushing `main` to `origin` is allowed by
-   the owner once the work is verified.
+   GitHub noreply address; do not change it, and do not add any co-author trailer. Pushing `main`
+   to `origin` is allowed by the owner once the work is verified.
 
 ## 6. Environment facts (discovered on this machine, 2026-10-14)
 
@@ -183,8 +182,8 @@ forge test --match-path "test/differential/*" -vv
 
 ## 8. How the owner starts this session by hand
 
-If this session was not started automatically, open a NEW Claude Code session in
-`C:\Users\cacci\defi-lending-core` and paste:
+If this work was not started automatically, open a NEW, clean working session in the repository
+root and paste:
 
 > Do milestone M8 of this repository. Read ONLY `docs/M8_HANDOFF.md` first and follow it exactly,
 > including its independence rules: you may read `docs/DESIGN.md`, `test/differential/` and

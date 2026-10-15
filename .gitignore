@@ -36,3 +36,8 @@ PORTFOLIO_NOTES.md
 
 # Windows-generated lock uses backslash paths; submodule SHAs already pin dependency versions
 foundry.lock
+
+# Local assistant/agent configuration: never published
+.claude/
+CLAUDE.md
+AGENTS.md
