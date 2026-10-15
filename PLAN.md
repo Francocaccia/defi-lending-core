@@ -93,7 +93,6 @@ model. Quality over feature count. Educational only: never real funds, never mai
 - Decide: repo visibility (private for now), repo name, public Sepolia deploy (burner key only).
 - Decide whether to add a free public mainnet RPC as a CI secret for the fork suite (the tests
   skip without it; a public keyless endpoint was used for local verification only).
-- Write the README section "What I learned".
 
 ## 7. Rules that always apply
 

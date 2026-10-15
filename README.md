@@ -286,10 +286,6 @@ Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.m
 | [`docs/M8_HANDOFF.md`](docs/M8_HANDOFF.md) | CLI contract and rules for the independent C++ model |
 | [`docs/DIFFERENTIAL_REPORT.md`](docs/DIFFERENTIAL_REPORT.md) | result of the Solidity-vs-C++ comparison, spec ambiguities, limits |
 
-## What I learned
-
-TODO (author).
-
 ## License
 
-MIT. See [`LICENSE`](LICENSE). Educational project, not audited, never use with real funds.
+MIT. See [`LICENSE`](LICENSE).
