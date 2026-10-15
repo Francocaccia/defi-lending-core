@@ -1,5 +1,6 @@
 #include "units.hpp"
 
+#include <cstddef>
 #include <stdexcept>
 
 namespace sim {
