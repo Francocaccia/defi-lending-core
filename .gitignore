@@ -20,6 +20,11 @@ keystore/
 reference-model/build/
 reference-model/cmake-build-*/
 
+# C++ risk simulator build output and the history fetcher's resumable cache (M9)
+simulator/build/
+simulator/cmake-build-*/
+simulator/data/.cache/
+
 # Python / Slither
 __pycache__/
 .venv/
