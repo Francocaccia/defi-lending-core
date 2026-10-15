@@ -213,6 +213,11 @@ class Parser {
 
 }  // namespace
 
-Json parseJson(const std::string& document) { return Parser(document).document(); }
+Json parseJson(const std::string& document) {
+  // Windows editors (and PowerShell's Set-Content) prepend a UTF-8 byte-order mark: skip it.
+  const bool bom = document.size() >= 3 && static_cast<unsigned char>(document[0]) == 0xEF &&
+                   static_cast<unsigned char>(document[1]) == 0xBB && static_cast<unsigned char>(document[2]) == 0xBF;
+  return Parser(bom ? document.substr(3) : document).document();
+}
 
 }  // namespace sim

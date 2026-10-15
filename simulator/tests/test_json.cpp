@@ -59,3 +59,8 @@ TEST(json_strList_accepts_scalar_or_array) {
   CHECK_EQ(j.at("many").strList().size(), static_cast<std::size_t>(3));
   CHECK_EQ(j.at("many").strList()[1], std::string("2"));
 }
+
+TEST(json_ignores_a_leading_utf8_byte_order_mark) {
+  const Json j = parseJson(std::string("\xEF\xBB\xBF") + R"({"a": "1"})");
+  CHECK_EQ(j.at("a").str(), std::string("1"));
+}
