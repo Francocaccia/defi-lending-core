@@ -1,0 +1,19 @@
+{
+  "name": "parameter_sweep",
+  "description": "Same price history, same borrower, different protocol parameters: how much does the safety margin between max LTV and the liquidation threshold, the liquidation bonus and the close factor change liquidation frequency and bad debt? Every variant is a valid deployment (the config loader applies the contracts' own validation).",
+  "data": { "eth": "../data/eth_usd_chainlink.csv", "usdc": "../data/usdc_usd_chainlink.csv" },
+  "stepSeconds": 3600,
+  "source": { "type": "historical", "horizonDays": [90, 365], "startStrideDays": 1 },
+  "market": { "utilization": "0.8" },
+  "borrower": { "collateralEth": "10", "ltvFractionOfMax": ["1.0"] },
+  "liquidator": { "latencyHours": [0, 6, 24, 72] },
+  "defaultRate": { "baseRate": "0", "slope1": "0.04", "slope2": "0.75", "optimalUtilization": "0.8" },
+  "variants": [
+    { "label": "conservative", "maxLtv": "0.65", "liquidationThreshold": "0.75", "liquidationBonus": "0.05", "closeFactor": "0.5" },
+    { "label": "default", "maxLtv": "0.75", "liquidationThreshold": "0.80", "liquidationBonus": "0.05", "closeFactor": "0.5" },
+    { "label": "tight-gap", "maxLtv": "0.78", "liquidationThreshold": "0.80", "liquidationBonus": "0.05", "closeFactor": "0.5" },
+    { "label": "aggressive", "maxLtv": "0.80", "liquidationThreshold": "0.85", "liquidationBonus": "0.05", "closeFactor": "0.5" },
+    { "label": "high-bonus", "maxLtv": "0.75", "liquidationThreshold": "0.80", "liquidationBonus": "0.10", "closeFactor": "0.5" },
+    { "label": "full-close", "maxLtv": "0.75", "liquidationThreshold": "0.80", "liquidationBonus": "0.05", "closeFactor": "1.0" }
+  ]
+}
