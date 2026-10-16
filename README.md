@@ -18,6 +18,12 @@ checked against an **independent C++ reference model**.
 - **What makes it different:** its math is re-implemented independently in C++ (written from the spec only) and differential-tested against the Solidity; line and branch coverage of `src/` is measured at 100%, hand-run mutation checks show the tests catch injected bugs, and a historical risk simulation replays six years of real Chainlink prices (with its limits stated).
 - **See it work:** the real output of the demo (supply, borrow, a year of interest, an ETH crash, liquidation, bad debt) is in [`docs/DEMO_OUTPUT.md`](docs/DEMO_OUTPUT.md); run it with `forge script script/Demo.s.sol --sig "runWithInterest()"`.
 
+### Demo
+
+![Demo: supply, borrow, ETH crash, liquidation and bad debt](docs/demo.png)
+
+Full output: [`docs/DEMO_OUTPUT.md`](docs/DEMO_OUTPUT.md)
+
 ## What it does
 
 One market, one collateral asset (WETH, 18 decimals) and one borrow/supply asset (USDC-like,
