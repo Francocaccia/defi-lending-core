@@ -9,10 +9,14 @@ with the reference model it links.
 Deliberate differences from the C++ engine, so that a match is a real result:
   * no floating-point screen: EVERY hourly observation is inspected with exact integer math;
   * interest is accrued at every observation (the C++ engine accrues lazily, when it inspects).
-A stray disagreement is therefore possible only on a razor-edge window (health factor within ~1e-5 of 1).
+Accruing every hour compounds slightly more than accruing once over a long quiet stretch (about 0.08% of
+the debt after a year at 4%), so on a long horizon a window whose health factor sits within ~1e-3 of 1 can
+flip. That is a difference of accrual POLICY, not of arithmetic, and `--lazy` proves it: it adopts the C++
+engine's policy (accrue only when inspecting, with the same screening rule) while keeping all arithmetic
+exact and independent, and then the counts must agree exactly.
 
 Usage:
-    python crosscheck.py <config.json> <defi_sim_output.csv> <horizonDays> <fraction:latencyHours> ...
+    python crosscheck.py <config.json> <defi_sim_output.csv> <horizonDays> <fraction:latencyHours> ... [--variant=LABEL] [--lazy]
 Example:
     python crosscheck.py ../configs/historical_baseline.json out/historical_baseline.csv 30 1.0:0 1.0:24
 
@@ -21,6 +25,7 @@ Uses only the Python standard library. Checks: n, unhealthy, liquidated, badDebt
 """
 import concurrent.futures
 import csv
+import datetime
 import json
 import os
 import sys
@@ -191,12 +196,27 @@ def run_window(task):
     unhealthy = liquidated = bad = stuck = underwater = False
     bad_fraction = 0.0
     pending, pending_step = False, 0
+    lazy = S["lazy"]
+    last_accrual = 0
+    coll_eth = coll / 1e18
+    debt_last = debt_from_scaled(scaled, index) / 1e6
+    lt_d, rate_d = p["liquidationThreshold"] / 1e18, S["rate"] / 1e27
     for k in range(1, H):
-        index = accrue_index(index, S["rate"], step)
+        if not lazy:
+            index = accrue_index(index, S["rate"], step)
         if pending and k < pending_step:
             continue
+        if lazy:
+            # the C++ engine's screening rule (floating point, only used to SKIP obviously healthy hours)
+            debt_now = debt_last * (1.0 + rate_d * (k - last_accrual) * step)
+            hf_approx = coll_eth * (e[k] / 1e8) * lt_d / (debt_now * (u[k] / 1e8))
+            if not pending and hf_approx > 1.0 + 1e-9:
+                continue
+            index = accrue_index(index, S["rate"], (k - last_accrual) * step)
+            last_accrual = k
         pc, pb = e[k] * 10**10, u[k] * 10**10
         debt = debt_from_scaled(scaled, index)
+        debt_last = debt / 1e6
         cvk, dv = collateral_value(coll, pc, COLL_DEC), debt_value(debt, pb, DEBT_DEC)
         if not health_factor(cvk, dv, p["liquidationThreshold"]) < W:
             pending = False
@@ -218,6 +238,8 @@ def run_window(task):
             continue
         scaled -= burned
         coll -= seized
+        coll_eth = coll / 1e18
+        debt_last = debt_from_scaled(scaled, index) / 1e6
         liquidated = True
         if coll == 0 and scaled != 0:
             bad = True
@@ -229,20 +251,31 @@ def run_window(task):
 
 
 def main():
-    if len(sys.argv) < 5:
+    if len([x for x in sys.argv[1:] if not x.startswith("--variant=") and x != "--lazy"]) < 4:
         sys.exit(__doc__)
-    cfg_path, sim_csv, horizon_days = sys.argv[1], sys.argv[2], int(sys.argv[3])
-    combos = [tuple(c.split(":")) for c in sys.argv[4:]]
+    opts = [x for x in sys.argv[1:] if x.startswith("--variant=")]
+    lazy = "--lazy" in sys.argv[1:]
+    args = [x for x in sys.argv[1:] if not x.startswith("--variant=") and x != "--lazy"]
+    want_variant = opts[0].split("=", 1)[1] if opts else None
+    cfg_path, sim_csv, horizon_days = args[0], args[1], int(args[2])
+    combos = [tuple(c.split(":")) for c in args[3:]]
     cfg = json.load(open(cfg_path, encoding="utf-8-sig"))
     if cfg["source"]["type"] != "historical":
         sys.exit("only historical experiments can be cross-checked (bootstrap paths come from the C++ generator)")
     base = os.path.dirname(os.path.abspath(cfg_path))
     eth = load_csv(os.path.join(base, cfg["data"]["eth"]))
     usdc = load_csv(os.path.join(base, cfg["data"]["usdc"]))
+    if "from" in cfg["data"]:  # same rule as the simulator: keep only updates at or after that UTC date
+        d = datetime.date.fromisoformat(cfg["data"]["from"])
+        start = int(datetime.datetime(d.year, d.month, d.day, tzinfo=datetime.timezone.utc).timestamp())
+        eth = [r for r in eth if r[0] >= start]
+        usdc = [r for r in usdc if r[0] >= start]
     step = int(cfg.get("stepSeconds", 3600))
     ge, gu = build_grid(eth, usdc, step)
 
-    variant = cfg["variants"][0]
+    variant = next((v for v in cfg["variants"] if v.get("label") == want_variant), None) if want_variant else cfg["variants"][0]
+    if variant is None:
+        sys.exit(f"no variant labelled {want_variant!r} in the config")
     rate_cfg = variant.get("rate", cfg.get("defaultRate"))
     protocol = {k: wad_param(variant[k]) for k in ("maxLtv", "liquidationThreshold", "liquidationBonus", "closeFactor")}
     rate = borrow_rate_per_second(*(wad_param(rate_cfg[k]) for k in ("baseRate", "slope1", "slope2", "optimalUtilization")),
@@ -252,7 +285,7 @@ def main():
         ge=ge, gu=gu, H=horizon_days * 86400 // step, step=step, protocol=protocol, rate=rate,
         collateral_wei=scaled_decimal(borrower["collateralEth"], 18) if "collateralEth" in borrower else 0,
         collateral_usd=scaled_decimal(borrower["collateralUsd"], 18) if "collateralUsd" in borrower else 0,
-        min_debt_usd=scaled_decimal(liquidator.get("minDebtUsd", "0"), 18),
+        min_debt_usd=scaled_decimal(liquidator.get("minDebtUsd", "0"), 18), lazy=lazy,
     )
     stride = int(cfg["source"].get("startStrideDays", 1)) * 86400 // step
     starts = list(range(0, len(ge) - setup["H"] + 1, stride))
