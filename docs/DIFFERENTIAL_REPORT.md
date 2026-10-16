@@ -148,9 +148,11 @@ Solidity. The clarifications are now in `docs/DESIGN.md` section 9.8.
 ## 8. Reproduce
 
 ```powershell
-# PowerShell, from the repo root (Windows: run the build inside a VS developer prompt)
-cmd /c '"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" && cmake -S reference-model -B reference-model/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build reference-model/build && ctest --test-dir reference-model/build --output-on-failure'
-$env:Path = "C:\Users\cacci\.foundry\bin;$env:Path"
+# PowerShell, from the repo root. On Windows run it in a Visual Studio 2022 "Developer PowerShell"
+# (cl.exe, CMake and Ninja on PATH) and make sure Foundry's bin directory is on PATH.
+cmake -S reference-model -B reference-model/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build reference-model/build
+ctest --test-dir reference-model/build --output-on-failure
 forge test --match-contract VectorsTest -vv                 # vectors vs the Solidity (no ffi)
 $env:FOUNDRY_PROFILE = 'diff'
 forge test --match-path "test/differential/*" -vv           # Solidity vs C++ (~15-30 min)

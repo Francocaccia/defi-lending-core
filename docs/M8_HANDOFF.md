@@ -143,20 +143,19 @@ the Solidity by `forge test --match-contract VectorsTest` (a plain default-profi
    GitHub noreply address; do not change it, and do not add any co-author trailer. Pushing `main`
    to `origin` is allowed by the owner once the work is verified.
 
-## 6. Environment facts (discovered on this machine, 2026-10-14)
+## 6. Environment facts (the Windows machine used for M8, 2026-10-14)
 
 - Windows 11, PowerShell. **WSL is NOT installed** (cannot be installed without admin + reboot).
 - **Visual Studio 2022 Community** with MSVC `14.41.34120` is installed, including a bundled
-  CMake and Ninja:
-  `C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
-  and `...\CMake\Ninja\ninja.exe`. Load the compiler with
-  `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat`.
+  CMake and Ninja,
+  located under `<VS 2022 install dir>\Common7\IDE\CommonExtensions\Microsoft\CMake\` (`CMake\bin\cmake.exe` and
+  `Ninja\ninja.exe`). Load the compiler with `<VS 2022 install dir>\VC\Auxiliary\Build\vcvars64.bat`.
 - **MSVC has NO `__int128`**, so a big-integer type is required (Boost.Multiprecision `cpp_int`/
   `uint512_t`, or another header-only library, or a small hand-written one if you justify it).
 - **Boost is NOT installed.** Getting it means a download; downloads need the owner's explicit
   OK, so ASK before fetching (options: vcpkg `boost-multiprecision`, CMake `FetchContent`, or
   another header-only library). The same applies to Catch2/GoogleTest.
-- Foundry 1.8.5 is at `C:\Users\cacci\.foundry\bin` (NOT on the global PATH: prepend it in your
+- Foundry 1.8.5 is installed under `%USERPROFILE%\.foundry\bin` (NOT on the global PATH: prepend it in your
   shell). `forge test` works natively on Windows.
 - GitHub Actions runs on `ubuntu-latest`: there `sudo apt-get install -y cmake ninja-build libboost-dev`
   (+ `catch2` or fetch it) is free and keeps CI zero-cost.
@@ -167,10 +166,10 @@ the Solidity by `forge test --match-contract VectorsTest` (a plain default-profi
 
 ```powershell
 # PowerShell, from the repo root
-$env:Path = "C:\Users\cacci\.foundry\bin;$env:Path"
+$env:Path = "$env:USERPROFILE\.foundry\bin;$env:Path"
 
 # build (Developer environment; adjust if you choose another toolchain)
-cmd /c '"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" && cmake -S reference-model -B reference-model/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build reference-model/build && ctest --test-dir reference-model/build --output-on-failure'
+cmd /c '"<VS 2022 install dir>\VC\Auxiliary\Build\vcvars64.bat" && cmake -S reference-model -B reference-model/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build reference-model/build && ctest --test-dir reference-model/build --output-on-failure'
 
 # spec vectors against the Solidity (no ffi needed)
 forge test --match-contract VectorsTest -vv
