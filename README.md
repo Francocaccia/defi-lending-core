@@ -6,9 +6,10 @@ checked against an **independent C++ reference model**.
 > **Educational / portfolio project. Not audited. Never use with real funds.** Runs on mocks,
 > local Anvil, mainnet *forks* (read-only) and Sepolia only.
 >
-> **Status:** milestones M0-M8 are complete: the protocol, its security pass, the demo, and the
+> **Status:** milestones M0-M9 are complete: the protocol, its security pass, the demo, the
 > independent C++ reference model with its differential tests (built in a separate clean session so
-> that it really is independent; see [Reference model](#reference-model)).
+> that it really is independent; see [Reference model](#reference-model)), and a risk simulator that
+> replays the protocol over six years of real Chainlink prices (see [Risk simulation](#risk-simulation)).
 
 - **What it is:** a small, security-focused over-collateralized lending protocol: supply and borrow with a compounding borrow index, Chainlink-based health factors and liquidations, with bad debt recorded explicitly.
 - **What makes it different:** its math is re-implemented independently in C++ (written from the spec only) and compared with the Solidity on fuzzed inputs, with 100% measured line and branch coverage of `src/` and hand-run mutation checks that confirm the tests actually catch bugs.
@@ -81,8 +82,9 @@ src/            LendingMarket, ChainlinkOracle, interfaces, libraries/
 test/           unit, fuzz, scenario, invariant, fork, security, script, differential
 script/         Demo (local story), DeploySepolia (optional), Addresses (verified constants)
 docs/           DESIGN (the spec), THREAT_MODEL, ROUNDING_REVIEW, SLITHER_TRIAGE,
-                GAS_AND_COVERAGE, M8_HANDOFF
+                GAS_AND_COVERAGE, M8_HANDOFF, DIFFERENTIAL_REPORT, RISK_SIMULATION
 reference-model/  the independent C++ model, its tests and CMake build (milestone M8)
+simulator/      the C++ risk simulator, its configs, Chainlink price data and results (milestone M9)
 ```
 
 ## Quick start (no C++ needed)
@@ -239,6 +241,26 @@ FOUNDRY_PROFILE=diff forge test --match-path "test/differential/*"
 No third-party library is needed (CMake and a C++17 compiler only); see
 [`reference-model/README.md`](reference-model/README.md) for the design and the CLI contract.
 
+## Risk simulation
+
+`simulator/` (C++17, links the reference model, so every decision uses the same exact integer math) replays one
+borrower position over **every rolling window of the real Chainlink ETH/USD and USDC/USD history** (2020-10 to
+2026-10, 134,222 + 3,310 on-chain rounds, committed with their SHA-256) and over 20,000 bootstrapped paths per
+horizon. Questions it answers: how often is a borrower liquidated, and when does a liquidation leave bad debt?
+
+- With the default parameters, a position opened at the max-LTV limit left **no bad debt in any of 2,111
+  90-day windows if the liquidator acts on the next hourly observation, but in 121 of them (5.73%) if it acts a day
+  later**. Bad debt is mostly a liquidator-latency risk, and nothing stands behind suppliers.
+- The margin between the liquidation threshold and the bonus matters: a threshold of 85% (still a valid deployment) already
+  leaves bad debt in 0.66% of windows with an immediate liquidator.
+- The dust gap (T22) is quantified: with a 25 USD liquidator floor, a 40 USD position was left unliquidated while
+  unhealthy in 49.1% of 90-day windows, and in 25.8% it was also insolvent.
+
+The engine was checked against an independent Python implementation of `docs/DESIGN.md` (13 of 17 combinations identical;
+the other 4 differ by at most 2 windows in 1,836 because of the interest-accrual policy, and agree exactly with the same
+policy). Method, all tables and, above all, the limits (one passive position, fixed utilization, idealised liquidator):
+[`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md); how to run it: [`simulator/README.md`](simulator/README.md).
+
 ## Measured metrics
 
 Foundry 1.8.5, solc 0.8.28. Commands and details: [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md).
@@ -251,6 +273,7 @@ Foundry 1.8.5, solc 0.8.28. Commands and details: [`docs/GAS_AND_COVERAGE.md`](d
 | Invariant properties (random action sequences, 5 actors) | 13, all hold; one campaign reached 53 liquidations and 13 bad-debt events |
 | Line / statement / branch / function coverage of `src/` | 100% (297/297), 100% (381/381), 100% (61/61), 100% (54/54) |
 | Slither (scope `src/`) | 41 raw: 0 fixed, 19 false positives, 22 accepted with justification |
+| Risk simulator | 61 unit tests (2,407 checks, MSVC); engine cross-checked against an independent Python implementation on 17 combinations (13 identical, 4 within 2 windows of 1,836, 7 of 7 identical with the same accrual policy) |
 | `LendingMarket` runtime size | 9,386 bytes |
 
 Gas per function (median, unit/scenario tests, fresh storage; see caveats in the docs): `supply`
@@ -270,7 +293,8 @@ Out of scope for v1, by design:
 Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)):
 - The Chainlink feeds are trusted. There is no circuit breaker, TWAP or deviation check, so a fresh
   but wrong price (flash crash) is accepted.
-- **Bad debt has no first-loss buffer**: suppliers absorb 100% of it.
+- **Bad debt has no first-loss buffer**: suppliers absorb 100% of it. The replay of real prices shows the
+  exposure is mainly about how fast liquidators act ([`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md)).
 - Fee-on-transfer, rebasing and hook tokens are unsupported as the market's own assets; token
   blacklists/pauses (e.g. USDC) are outside the protocol's control.
 - Parameters and oracle addresses are immutable: a deployment mistake cannot be fixed.
@@ -289,6 +313,8 @@ Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.m
 | [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md) | commands and raw numbers behind the metrics |
 | [`docs/M8_HANDOFF.md`](docs/M8_HANDOFF.md) | CLI contract and rules for the independent C++ model |
 | [`docs/DIFFERENTIAL_REPORT.md`](docs/DIFFERENTIAL_REPORT.md) | result of the Solidity-vs-C++ comparison, spec ambiguities, limits |
+| [`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md) | liquidation and bad-debt rates on the real price history, parameter sweep, dust gap, validation, limits |
+| [`simulator/README.md`](simulator/README.md) | how to build and run the risk simulator, its configs and data |
 
 ## License
 

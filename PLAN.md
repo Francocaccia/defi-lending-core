@@ -22,7 +22,7 @@ model. Quality over feature count. Educational only: never real funds, never mai
 | M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | **done** | Slither ran natively in a venv (no WSL); 0 findings after triage |
 | M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **done** | demo verified on Anvil (22 txs) and in simulation; Sepolia script dry-run against live feeds |
 | M8 | C++ reference model + differential tests | **done** | independent C++17 model written from `docs/DESIGN.md` only; 0 mismatches in 25,000 fuzz comparisons + 1,139 vectors; `docs/DIFFERENTIAL_REPORT.md` |
-| M9 | Monte Carlo risk simulator | stretch, only if asked | |
+| M9 | Risk simulator (historical replay + bootstrap) | **done** | C++17 `simulator/` linking the reference model; real Chainlink history; independent Python cross-check; `docs/RISK_SIMULATION.md` |
 
 ## 3. What exists today
 
@@ -66,6 +66,20 @@ model. Quality over feature count. Educational only: never real funds, never mai
     success path is covered by the 30 successful vectors, not by the fuzzer.
   - Optional: swap the hand-written test harness for Catch2 and/or the big-integer type for
     Boost.Multiprecision (needs the owner's OK to download; not needed for correctness).
+### M9: risk simulator (done)
+- Delivered: `simulator/` (engine on the reference model's exact math, historical-window and block-bootstrap
+  path sources, JSON configs with the contracts' parameter names, Markdown/CSV reports, 61 unit tests),
+  `simulator/tools/fetch_chainlink_history.py` (read-only on-chain download; honours `MAINNET_RPC_URL`, never
+  prints it), `simulator/tools/crosscheck.py` (second implementation from DESIGN section 9), the committed price
+  data with SHA-256, four experiments and their results, `docs/RISK_SIMULATION.md`, a `simulator` job in CI.
+- Findings are in `docs/RISK_SIMULATION.md`; threat-model rows T12 and T22 now cite them.
+- Deferred / not verified:
+  - The CI job builds the simulator with GCC (Linux) and MSVC (Windows); only MSVC has been run so far. The bootstrap
+    uses `log`/`exp`, so its exact numbers may differ in rare paths on another compiler.
+  - Not simulated: late bad-debt recognition and the supplier bank-run dynamic (T32; needs a multi-account market
+    model), stale-oracle liquidation blocks, a multi-position market with utilization feedback.
+  - The ETH/USD history is used from 2020-10-06; the earlier rounds of the proxy are not market data.
+
 ### Smaller follow-ups (not blocking)
 - Add Slither to CI once a Linux runner setup is confirmed (currently documented, run manually).
 - gitleaks is configured (`.gitleaks.toml`) but not installed locally nor run in CI.
