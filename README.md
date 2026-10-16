@@ -1,5 +1,7 @@
 # defi-lending-core
 
+[![CI](https://github.com/Francocaccia/defi-lending-core/actions/workflows/ci.yml/badge.svg)](https://github.com/Francocaccia/defi-lending-core/actions/workflows/ci.yml)
+
 A minimal **over-collateralized lending protocol** (Solidity + Foundry + Chainlink) whose math is
 checked against an **independent C++ reference model**.
 
@@ -7,13 +9,14 @@ checked against an **independent C++ reference model**.
 > local Anvil, mainnet *forks* (read-only) and Sepolia only.
 >
 > **Status:** milestones M0-M9 are complete: the protocol, its security pass, the demo, the
-> independent C++ reference model with its differential tests (built in a separate clean session so
-> that it really is independent; see [Reference model](#reference-model)), and a risk simulator that
-> replays the protocol over six years of real Chainlink prices (see [Risk simulation](#risk-simulation)).
+> independent C++ reference model with its differential tests (written in a separate clean session so that
+> it really is independent; see [Reference model](#reference-model)), and a historical risk simulation on six
+> years of real Chainlink prices (see [Historical risk simulation](#historical-risk-simulation-m9), including
+> what it cannot show).
 
-- **What it is:** a small, security-focused over-collateralized lending protocol: supply and borrow with a compounding borrow index, Chainlink-based health factors and liquidations, with bad debt recorded explicitly.
-- **What makes it different:** its math is re-implemented independently in C++ (written from the spec only) and compared with the Solidity on fuzzed inputs, with 100% measured line and branch coverage of `src/` and hand-run mutation checks that confirm the tests actually catch bugs.
-- **See it work:** `forge script script/Demo.s.sol --sig "runWithInterest()"` replays supply, borrow, an ETH crash, liquidation and bad debt on mock feeds (see [the demo](#see-it-work-the-demo)).
+- **What it is:** a small, security-focused over-collateralized lending protocol (Solidity, Foundry, Chainlink): supply and borrow with a compounding borrow index, oracle-based health factors and liquidations, and bad debt recorded explicitly.
+- **What makes it different:** its math is re-implemented independently in C++ (written from the spec only) and differential-tested against the Solidity; line and branch coverage of `src/` is measured at 100%, hand-run mutation checks show the tests catch injected bugs, and a historical risk simulation replays six years of real Chainlink prices (with its limits stated).
+- **See it work:** the real output of the demo (supply, borrow, a year of interest, an ETH crash, liquidation, bad debt) is in [`docs/DEMO_OUTPUT.md`](docs/DEMO_OUTPUT.md); run it with `forge script script/Demo.s.sol --sig "runWithInterest()"`.
 
 ## What it does
 
@@ -99,7 +102,12 @@ forge test
 ```
 
 `forge test` takes seconds. The fork and differential suites skip themselves automatically, so
-this works on a clean machine with no keys and no toolchain.
+this works on a clean machine with no keys and no toolchain. Measured from a fresh clone on the author's
+Windows machine (solc already cached): clone with submodules 18 s, `forge build` 21 s, `forge test` 23 s.
+
+**Windows:** the Chainlink dependency contains very deep paths. If `git clone --recurse-submodules` fails
+with "Filename too long" (it did when cloned into a deep directory), run `git config --global core.longpaths true`
+or clone into a short path such as `C:\src`.
 
 ### See it work: the demo
 
@@ -117,7 +125,8 @@ forge script script/Demo.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --unl
 ```
 
 The accounts are Anvil's public development accounts (addresses only, no keys in the repo).
-Example output (simulation mode):
+Example output (simulation mode; the full real output, with the exact command and Foundry version, is in
+[`docs/DEMO_OUTPUT.md`](docs/DEMO_OUTPUT.md)):
 
 ```
 == 5. ETH CRASHES from $2,000 to $1,200 (mock oracle updated)
@@ -195,8 +204,8 @@ The full reasoning is in [`docs/DESIGN.md`](docs/DESIGN.md); the highlights:
 | **Fork** | works with the real feeds, WETH and USDC (the real USDC price is about $0.9998, not $1) |
 | **Reentrancy** | a hostile ERC-777-style token calling back on every transfer cannot re-enter any function; views are already final during callbacks |
 | **Demo + vectors** | the demo cannot rot (it is a test); ~1,100 spec vectors from an independent implementation match the Solidity |
-| Mutation checks (by hand) | injected bugs are caught: 18/18 in the market's unit tests, 11/11 by the invariant suite alone, 8/8 reentrancy guards |
-| Static analysis | Slither: 41 raw findings: 0 fixed (none was a defect), 19 false positives, 22 accepted with written justification ([`docs/SLITHER_TRIAGE.md`](docs/SLITHER_TRIAGE.md)) |
+| Mutation checks (by hand, at M6; not re-run in the final pass) | injected bugs are caught: 18/18 in the market's unit tests, 11/11 by the invariant suite alone, 8/8 reentrancy guards |
+| Static analysis | Slither 0.11.6: 0 findings with the shipped configuration; 39 raw findings if the inline suppressions are removed (41 at the first run, before the `MarketMath` refactor), none a defect ([`docs/SLITHER_TRIAGE.md`](docs/SLITHER_TRIAGE.md)) |
 
 ## Reference model
 
@@ -221,7 +230,7 @@ kernels (`accrue`, `repayAmounts`, `liquidationAmounts`, `badDebt`). For each on
 division by zero and 10**78), calls the Solidity and the C++ binary through `vm.ffi`, and requires
 that either both fail or both return the same words.
 
-**Result:** 0 mismatches. 25,000 fuzz comparisons per run, two runs with different seeds, plus
+**Result at M8:** 0 mismatches. 25,000 fuzz comparisons per run, two runs with different seeds, plus
 1,139 shared spec vectors and the worked examples of `docs/DESIGN.md`. The tests are sensitive: an
 injected rounding bug in the C++ is caught on the first input, and an injected "evaluate lazily"
 bug within a few hundred runs. The full account, including the (non-mismatch) places where
@@ -241,43 +250,54 @@ FOUNDRY_PROFILE=diff forge test --match-path "test/differential/*"
 No third-party library is needed (CMake and a C++17 compiler only); see
 [`reference-model/README.md`](reference-model/README.md) for the design and the CLI contract.
 
-## Risk simulation
+## Historical risk simulation (M9)
 
 `simulator/` (C++17, links the reference model, so every decision uses the same exact integer math) replays one
-borrower position over **every rolling window of the real Chainlink ETH/USD and USDC/USD history** (2020-10 to
-2026-10, 134,222 + 3,310 on-chain rounds, committed with their SHA-256) and over 20,000 bootstrapped paths per
-horizon. Questions it answers: how often is a borrower liquidated, and when does a liquidation leave bad debt?
+borrower position over **every rolling window of the real Chainlink ETH/USD and USDC/USD history from October 2020
+to October 2026** (on-chain rounds, committed with their SHA-256) and over 20,000 bootstrapped paths per horizon.
+It asks how often a borrower is liquidated and when a liquidation leaves bad debt. Findings with the default
+parameters and a position opened at the 75% max LTV (all numbers are in
+[`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md), generated from the committed CSVs):
 
-- With the default parameters, a position opened at the max-LTV limit left **no bad debt in any of 2,111
-  90-day windows if the liquidator acts on the next hourly observation, but in 121 of them (5.73%) if it acts a day
-  later**. Bad debt is mostly a liquidator-latency risk, and nothing stands behind suppliers.
-- The margin between the liquidation threshold and the bonus matters: a threshold of 85% (still a valid deployment) already
-  leaves bad debt in 0.66% of windows with an immediate liquidator.
-- The dust gap (T22) is quantified: with a 25 USD liquidator floor, a 40 USD position was left unliquidated while
-  unhealthy in 49.1% of 90-day windows, and in 25.8% it was also insolvent.
+- **Bad debt depends on how fast liquidators act.** It was essentially absent when the liquidator acted within
+  hours (0 of 2,111 overlapping 90-day windows at the next hourly observation, 1 at a 1 h delay, 0 at 6 h) and
+  appeared in **121 of them (5.73%) with a one-day delay** and 254 (12.03%) with three days. The 0% is the best
+  case of a near-instant liquidator, not a safety claim.
+- **The margin parameters matter.** A liquidation threshold of 85% (still a valid deployment) left bad debt in 14
+  windows (0.66%) even with an immediate liquidator and in 7.44% with a 6 h delay; a 10% bonus, in 2.89% at 6 h;
+  a 100% close factor cut the one-day-delay share from 5.73% to 1.28%.
+- **The dust gap (threat T22) is large:** with a 25 USD liquidator floor, a 40 USD position was left unliquidated
+  while unhealthy in 49.1% of the overlapping 90-day windows, and in 25.8% it was also insolvent.
 
-The engine was checked against an independent Python implementation of `docs/DESIGN.md` (13 of 17 combinations identical;
-the other 4 differ by at most 2 windows in 1,836 because of the interest-accrual policy, and agree exactly with the same
-policy). Method, all tables and, above all, the limits (one passive position, fixed utilization, idealised liquidator):
-[`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md); how to run it: [`simulator/README.md`](simulator/README.md).
+**Limits, read before quoting any of it.** The sample starts in October 2020: the March 2020 "Black Thursday" crash
+and everything earlier are not in it, so the worst known DeFi stress event is outside the evidence. The windows
+overlap: 2,111 windows are about 24 non-overlapping 90-day periods (about 6 one-year periods), so "did not occur in
+the observed period" is the strongest statement available. It simulates one passive position at fixed utilization
+with an idealised liquidator (latency is the only friction), and not late bad-debt recognition (T32). The Python
+cross-check is a second implementation written in the same project, not an independent audit: it caught a real
+policy difference (lazy against hourly interest accrual) and matches exactly under the same policy, but it cannot
+catch a misunderstanding both implementations share. How to run it: [`simulator/README.md`](simulator/README.md).
 
 ## Measured metrics
 
-Foundry 1.8.5, solc 0.8.28. Commands and details: [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md).
+All numbers were reproduced on 2026-10-16 from a fresh clone (Foundry 1.8.5, solc 0.8.28, Windows, MSVC 19.41);
+commands and raw output in [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md) and the sections above.
 
 | Metric | Value |
 |---|---|
-| Tests, default profile, no RPC (what CI runs) | 277 passed, 0 failed, 2 skipped (fork + differential suites) |
-| Tests, CI profile (1000 fuzz runs, invariant depth 128) | 277 passed, 0 failed, 2 skipped |
-| Tests with a mainnet RPC configured | 284 passed, 0 failed, 1 skipped (differential) |
-| Invariant properties (random action sequences, 5 actors) | 13, all hold; one campaign reached 53 liquidations and 13 bad-debt events |
-| Line / statement / branch / function coverage of `src/` | 100% (297/297), 100% (381/381), 100% (61/61), 100% (54/54) |
-| Slither (scope `src/`) | 41 raw: 0 fixed, 19 false positives, 22 accepted with justification |
-| Risk simulator | 61 unit tests (2,407 checks, MSVC); engine cross-checked against an independent Python implementation on 17 combinations (13 identical, 4 within 2 windows of 1,836, 7 of 7 identical with the same accrual policy) |
-| `LendingMarket` runtime size | 9,386 bytes |
+| Tests, default profile, no RPC (what CI runs): `forge test` | 277 passed, 0 failed, 2 skipped (the fork and differential suites skip themselves) |
+| Tests, CI profile (1000 fuzz runs, invariant depth 128): `FOUNDRY_PROFILE=ci forge test` | 277 passed, 0 failed, 2 skipped (48 s) |
+| Fork tests (7, real Chainlink feeds, WETH, USDC) | skip without `MAINNET_RPC_URL` (checked with an empty value, as in CI); not re-run in the final pass |
+| Differential tests, Solidity vs C++ (`FOUNDRY_PROFILE=diff`, 1000 runs per function) | 31 passed, 0 failed, 0 skipped (30 differential tests + the 1,139-vector test); no mismatch; 916 s |
+| Invariant properties | 13, all hold. One 256-run campaign (default profile, depth 64) reached 47 liquidations, 16 bad-debt events, 1,067 borrows and 1,229 collateral withdrawals (328 with debt, 126 rejected by the LTV rule); the totals vary with the random seed |
+| Line / statement / branch / function coverage of `src/` (`forge coverage`) | 100% (297/297), 100% (381/381), 100% (61/61), 100% (54/54) |
+| C++ reference model tests (`ctest`) | 11/11 |
+| Risk simulator tests (`ctest`) | 61 tests, 2,407 checks, 0 failures; the four experiments re-run from a fresh clone give byte-identical CSV and Markdown |
+| Slither 0.11.6 | 0 findings with the shipped configuration; 39 without the inline suppressions |
+| `LendingMarket` runtime size (`forge build --sizes`) | 9,386 bytes |
 
-Gas per function (median, unit/scenario tests, fresh storage; see caveats in the docs): `supply`
-133k, `borrow` 138k, `repay` 64k, `withdrawCollateral` 66k, `liquidate` 131k.
+Gas per function (median of the unit/scenario tests, fresh storage; see caveats in the docs): `supply`
+133k, `borrow` 138k, `repay` 64k, `withdrawCollateral` 66k, `liquidate` 132k.
 
 ## Limitations (honest list)
 
@@ -293,8 +313,9 @@ Out of scope for v1, by design:
 Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)):
 - The Chainlink feeds are trusted. There is no circuit breaker, TWAP or deviation check, so a fresh
   but wrong price (flash crash) is accepted.
-- **Bad debt has no first-loss buffer**: suppliers absorb 100% of it. The replay of real prices shows the
-  exposure is mainly about how fast liquidators act ([`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md)).
+- **Bad debt has no first-loss buffer**: suppliers absorb 100% of it. Replaying real prices from October 2020
+  shows the exposure is mainly about how fast liquidators act, and that evidence excludes March 2020
+  ([`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md)).
 - Fee-on-transfer, rebasing and hook tokens are unsupported as the market's own assets; token
   blacklists/pauses (e.g. USDC) are outside the protocol's control.
 - Parameters and oracle addresses are immutable: a deployment mistake cannot be fixed.
@@ -313,6 +334,7 @@ Known risks that remain (details in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.m
 | [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md) | commands and raw numbers behind the metrics |
 | [`docs/M8_HANDOFF.md`](docs/M8_HANDOFF.md) | CLI contract and rules for the independent C++ model |
 | [`docs/DIFFERENTIAL_REPORT.md`](docs/DIFFERENTIAL_REPORT.md) | result of the Solidity-vs-C++ comparison, spec ambiguities, limits |
+| [`docs/DEMO_OUTPUT.md`](docs/DEMO_OUTPUT.md) | the real output of the local demo, with the exact command and Foundry version |
 | [`docs/RISK_SIMULATION.md`](docs/RISK_SIMULATION.md) | liquidation and bad-debt rates on the real price history, parameter sweep, dust gap, validation, limits |
 | [`simulator/README.md`](simulator/README.md) | how to build and run the risk simulator, its configs and data |
 
