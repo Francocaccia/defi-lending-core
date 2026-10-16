@@ -22,7 +22,7 @@ model. Quality over feature count. Educational only: never real funds, never mai
 | M6 | Security pass (Slither, threat model, rounding review, gas, coverage) | **done** | Slither ran natively in a venv (no WSL); 0 findings after triage |
 | M7 | Demo script, optional Sepolia deploy, README/DESIGN polish, `docs/M8_HANDOFF.md` | **done** | demo verified on Anvil (22 txs) and in simulation; Sepolia script dry-run against live feeds |
 | M8 | C++ reference model + differential tests | **done** | independent C++17 model written from `docs/DESIGN.md` only; 0 mismatches in 25,000 fuzz comparisons + 1,139 vectors; `docs/DIFFERENTIAL_REPORT.md` |
-| M9 | Risk simulator (historical replay + bootstrap) | **done** | C++17 `simulator/` linking the reference model; real Chainlink history; independent Python cross-check; `docs/RISK_SIMULATION.md` |
+| M9 | Risk simulator (historical replay + bootstrap) | **done** | C++17 `simulator/` linking the reference model; real Chainlink history; second-implementation Python cross-check; `docs/RISK_SIMULATION.md` |
 
 ## 3. What exists today
 
@@ -59,18 +59,18 @@ model. Quality over feature count. Educational only: never real funds, never mai
 - Delivered: `reference-model/` (CMake, C++17, hand-written exact 256-bit math with a 512-bit
   `mulDiv`, no third-party dependency), C++ unit + CLI + vector tests, CI building the model before
   `forge test`, `docs/DIFFERENTIAL_REPORT.md`, README "Reference model".
-- Result: 0 mismatches (details and the evidence in `docs/DIFFERENTIAL_REPORT.md`). CI is green
-  on `main`: model built with GCC and MSVC, 11/11 C++ tests, differential suite 29/29.
+- Result: 0 mismatches (details and the evidence in `docs/DIFFERENTIAL_REPORT.md`). When M8 was
+  finished, CI was green on `main` (model built with GCC and MSVC, 11/11 C++ tests, differential suite 29/29).
 - Pending / deferred from M8:
   - The fuzz distribution almost never produces VALID `validateRiskParams` inputs (about 1%); that
     success path is covered by the 30 successful vectors, not by the fuzzer.
   - Optional: swap the hand-written test harness for Catch2 and/or the big-integer type for
-    Boost.Multiprecision (needs the owner's OK to download; not needed for correctness).
+    Boost.Multiprecision (a new third-party dependency; not needed for correctness).
 ### M9: risk simulator (done)
 - Delivered: `simulator/` (engine on the reference model's exact math, historical-window and block-bootstrap
   path sources, JSON configs with the contracts' parameter names, Markdown/CSV reports, 61 unit tests),
   `simulator/tools/fetch_chainlink_history.py` (read-only on-chain download; honours `MAINNET_RPC_URL`, never
-  prints it), `simulator/tools/crosscheck.py` (second implementation from DESIGN section 9), the committed price
+  prints it), `simulator/tools/crosscheck.py` (a second implementation of the engine, written from DESIGN section 9 in the same project), the committed price
   data with SHA-256, four experiments and their results, `docs/RISK_SIMULATION.md`, a `simulator` job in CI.
 - Findings are in `docs/RISK_SIMULATION.md`; threat-model rows T12 and T22 now cite them.
 - Deferred / not verified:
@@ -79,13 +79,6 @@ model. Quality over feature count. Educational only: never real funds, never mai
   - Not simulated: late bad-debt recognition and the supplier bank-run dynamic (T32; needs a multi-account market
     model), stale-oracle liquidation blocks, a multi-position market with utilization feedback.
   - The ETH/USD history is used from 2020-10-06; the earlier rounds of the proxy are not market data.
-
-### Smaller follow-ups (not blocking)
-- Add Slither to CI once a Linux runner setup is confirmed (currently documented, run manually).
-- gitleaks is configured (`.gitleaks.toml`) but not installed locally nor run in CI.
-- Optionally add `MAINNET_RPC_URL` as a CI secret to run the fork suite in CI.
-- Hardening ideas listed in `docs/THREAT_MODEL.md` §3 (circuit breaker, insurance fund) are
-  intentionally out of scope for v1.
 
 ## 5. Key design decisions so far (details in `docs/DESIGN.md`)
 
@@ -101,14 +94,23 @@ model. Quality over feature count. Educational only: never real funds, never mai
    deposits, repayments and supplier exits keep working.
 10. Static-analysis suppressions are inline, scoped and justified (`docs/SLITHER_TRIAGE.md`).
 
-## 6. Open decisions / things only the owner can do
+## 6. Roadmap / future work
 
-- Confirm the copyright holder name in `LICENSE` ("Franco Caccia" is a guess).
-- Decide: repo visibility (private for now), repo name, public Sepolia deploy (burner key only).
-- Decide whether to add a free public mainnet RPC as a CI secret for the fork suite (the tests
-  skip without it; a public keyless endpoint was used for local verification only).
+Not planned for v1; listed so the limits are explicit.
 
-## 7. Rules that always apply
+- **CI:** add Slither and gitleaks to CI (both are configured and were run locally, see
+  `docs/SLITHER_TRIAGE.md` and `.gitleaks.toml`); run the fork suite in CI by adding a mainnet RPC
+  secret (the tests skip without one).
+- **Protocol hardening** (listed in `docs/THREAT_MODEL.md`): a first-loss buffer for bad debt, a
+  minimum borrow size (T22), a circuit breaker or price-deviation check on the oracle, a
+  solvency-aware share price (T32).
+- **Simulator:** a multi-account market model to simulate late bad-debt recognition and supplier
+  runs (T32), stale-oracle liquidation blocks, a liquidator with capital and gas limits, utilization
+  feedback, and a second collateral asset.
+- **Reference model:** swap the hand-written test harness for Catch2 and/or the big-integer type for
+  Boost.Multiprecision, if a third-party dependency is acceptable.
+
+## 7. Project rules
 
 Zero cost; no secrets in the repo; no code copied from other protocols; every address verified
 from official sources; no invented metrics; commits in English, small, authored with the
