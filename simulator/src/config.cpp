@@ -90,6 +90,14 @@ Config parseConfig(const Json& root, const std::string& baseDir) {
   const Json& data = root.at("data");
   c.ethCsv = resolve(baseDir, data.at("eth").str());
   c.usdcCsv = resolve(baseDir, data.at("usdc").str());
+  if (const Json* from = data.find("from")) {
+    c.fromText = from->str();
+    try {
+      c.fromUnix = parseIsoDate(c.fromText);
+    } catch (const std::invalid_argument& e) {
+      throw std::runtime_error(std::string("config: data.from: ") + e.what());
+    }
+  }
 
   if (const Json* s = root.find("stepSeconds")) c.stepSeconds = toInt(s->str(), "stepSeconds");
   if (c.stepSeconds <= 0) throw std::runtime_error("config: stepSeconds must be positive");

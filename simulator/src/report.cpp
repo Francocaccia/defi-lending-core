@@ -59,7 +59,7 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
     << "\n";
   if (hist) {
     o << "  (a window starts every " << cfg.source.startStrideDays
-      << " day(s) across the whole history; no period is selected or excluded)\n";
+      << " day(s) across the whole loaded history; no period inside it is selected or excluded)\n";
   } else {
     o << "  (" << cfg.source.paths << " synthetic paths per horizon, mean block length "
       << fmt("%.1f", cfg.source.meanBlockDays) << " days, seed " << cfg.source.seed << ")\n";
@@ -67,6 +67,10 @@ std::string renderMarkdown(const Config& cfg, const Grid& grid, const std::vecto
   o << "- **Oracle history:** Chainlink ETH/USD from " << isoDate(grid.t0) << " to "
     << isoDate(grid.timeAt(grid.size() - 1)) << ", observed every " << cfg.stepSeconds
     << " s with carry-forward of the last round (" << grid.size() << " observations).\n";
+  if (!cfg.fromText.empty()) {
+    o << "  The history starts on " << cfg.fromText << " (`data.from`): earlier rounds of this proxy are not market data "
+      << "(pre-launch rounds with constant answers and gaps of days to weeks) and are excluded on purpose.\n";
+  }
   if (grid.firstRealUsdc == 0) {
     o << "- **USDC/USD:** real Chainlink USDC/USD data over the whole span.\n";
   } else if (grid.firstRealUsdc < grid.size()) {

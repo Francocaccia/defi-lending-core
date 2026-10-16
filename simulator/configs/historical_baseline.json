@@ -1,7 +1,7 @@
 {
   "name": "historical_baseline",
   "description": "The protocol's default parameters (the ones in the demo and the Sepolia script) replayed over EVERY rolling window of the real Chainlink ETH/USD + USDC/USD history. Question: how often does a passive borrower who opens at a given leverage get liquidated, and does any liquidation leave bad debt?",
-  "data": { "eth": "../data/eth_usd_chainlink.csv", "usdc": "../data/usdc_usd_chainlink.csv" },
+  "data": { "eth": "../data/eth_usd_chainlink.csv", "usdc": "../data/usdc_usd_chainlink.csv", "from": "2020-10-06" },
   "stepSeconds": 3600,
   "source": { "type": "historical", "horizonDays": [30, 90, 365], "startStrideDays": 1 },
   "market": { "utilization": "0.8" },

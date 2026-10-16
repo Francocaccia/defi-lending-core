@@ -107,3 +107,14 @@ TEST(config_the_committed_example_configs_are_valid) {
     CHECK(!c.latencyHours.empty());
   }
 }
+
+TEST(config_data_from_is_optional_and_validated) {
+  const Config none = parseConfig(parseJson(kMinimal), ".");
+  CHECK_EQ(none.fromUnix, static_cast<std::int64_t>(0));
+  const std::string with = replaceOnce(kMinimal, R"("usdc": "usdc.csv" })", R"("usdc": "usdc.csv", "from": "2020-09-13" })");
+  const Config c = parseConfig(parseJson(with), ".");
+  CHECK_EQ(c.fromUnix, static_cast<std::int64_t>(1599955200));
+  CHECK_EQ(c.fromText, std::string("2020-09-13"));
+  CHECK_THROWS_ANY(parseConfig(parseJson(replaceOnce(kMinimal, R"("usdc": "usdc.csv" })",
+                                                     R"("usdc": "usdc.csv", "from": "13/09/2020" })")), "."));
+}

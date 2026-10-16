@@ -33,6 +33,8 @@ struct Config {
   std::string description;
   std::string ethCsv;
   std::string usdcCsv;
+  std::int64_t fromUnix = 0;    // data.from (UTC midnight); 0 = use the whole file
+  std::string fromText;         // as written, for the report
   std::int64_t stepSeconds = 3600;
   SourceSpec source;
   U256 utilization;                         // WAD

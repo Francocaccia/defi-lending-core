@@ -28,6 +28,10 @@ double toDouble(const U256& v);
 /// Fixed-point to text with `shown` fractional digits (truncated), e.g. (1.5e18, 18, 4) -> "1.5000".
 std::string formatScaled(const U256& v, unsigned decimals, unsigned shown);
 
+/// "2020-10-06" -> unix seconds at 00:00:00 UTC. Throws std::invalid_argument on anything else
+/// (including impossible dates such as 2021-02-30).
+std::int64_t parseIsoDate(const std::string& text);
+
 /// UTC civil year of a unix timestamp (proleptic Gregorian).
 int yearOf(std::int64_t unixSeconds);
 

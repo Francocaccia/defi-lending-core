@@ -60,6 +60,15 @@ std::vector<OraclePoint> loadOracleCsv(const std::string& path) {
   return parseOracleCsv(ss.str(), path);
 }
 
+std::vector<OraclePoint> fromTime(const std::vector<OraclePoint>& points, std::int64_t fromUnix) {
+  std::vector<OraclePoint> out;
+  for (const OraclePoint& p : points) {
+    if (p.t >= fromUnix) out.push_back(p);
+  }
+  if (out.empty()) throw std::runtime_error("no oracle updates at or after the configured 'from' date");
+  return out;
+}
+
 Grid buildGrid(const std::vector<OraclePoint>& eth, const std::vector<OraclePoint>& usdc,
                std::int64_t stepSeconds, std::uint64_t usdcFallbackAnswer) {
   if (stepSeconds <= 0) throw std::invalid_argument("stepSeconds must be positive");

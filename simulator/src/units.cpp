@@ -67,6 +67,27 @@ std::string formatScaled(const U256& v, unsigned decimals, unsigned shown) {
   return shown == 0 ? whole.toDecimal() : whole.toDecimal() + "." + frac;
 }
 
+std::int64_t parseIsoDate(const std::string& text) {
+  const auto bad = [&text]() { return std::invalid_argument("date must look like YYYY-MM-DD, got '" + text + "'"); };
+  if (text.size() != 10 || text[4] != '-' || text[7] != '-') throw bad();
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (i != 4 && i != 7 && (text[i] < '0' || text[i] > '9')) throw bad();
+  }
+  std::int64_t y = std::stoi(text.substr(0, 4));
+  const std::int64_t m = std::stoi(text.substr(5, 2));
+  const std::int64_t d = std::stoi(text.substr(8, 2));
+  static const int kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  const bool leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+  if (m < 1 || m > 12 || d < 1 || d > kDays[m - 1] + ((m == 2 && leap) ? 1 : 0)) throw bad();
+  // Howard Hinnant's days_from_civil.
+  if (m <= 2) --y;
+  const std::int64_t era = (y >= 0 ? y : y - 399) / 400;
+  const std::int64_t yoe = y - era * 400;
+  const std::int64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+  const std::int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return (era * 146097 + doe - 719468) * 86400;
+}
+
 int yearOf(std::int64_t unixSeconds) {
   // Howard Hinnant's civil_from_days.
   std::int64_t z = unixSeconds / 86400;

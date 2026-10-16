@@ -57,3 +57,15 @@ TEST(units_yearOf_handles_epoch_leap_days_and_negatives) {
   CHECK_EQ(yearOf(1609459199), 2020);   // 2020-12-31 23:59:59
   CHECK_EQ(yearOf(1609459200), 2021);   // 2021-01-01 00:00:00
 }
+
+TEST(units_parseIsoDate_matches_known_timestamps_and_rejects_bad_dates) {
+  CHECK_EQ(parseIsoDate("1970-01-01"), static_cast<std::int64_t>(0));
+  CHECK_EQ(parseIsoDate("2000-03-01"), static_cast<std::int64_t>(951868800));
+  CHECK_EQ(parseIsoDate("2020-09-13"), static_cast<std::int64_t>(1599955200));
+  CHECK_EQ(parseIsoDate("2024-02-29"), static_cast<std::int64_t>(1709164800));  // a leap day
+  CHECK_THROWS_ANY(parseIsoDate("2023-02-29"));
+  CHECK_THROWS_ANY(parseIsoDate("2021-13-01"));
+  CHECK_THROWS_ANY(parseIsoDate("2021-1-01"));
+  CHECK_THROWS_ANY(parseIsoDate("20210101"));
+  CHECK_THROWS_ANY(parseIsoDate("2021-01-0x"));
+}

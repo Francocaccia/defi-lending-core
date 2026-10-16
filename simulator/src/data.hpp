@@ -19,6 +19,10 @@ struct OraclePoint {
 std::vector<OraclePoint> loadOracleCsv(const std::string& path);
 std::vector<OraclePoint> parseOracleCsv(const std::string& csvText, const std::string& label);
 
+/// The points with `t >= fromUnix`. Used to start the history where a feed was really live (see the
+/// `data.from` config field). Throws std::runtime_error if nothing is left.
+std::vector<OraclePoint> fromTime(const std::vector<OraclePoint>& points, std::int64_t fromUnix);
+
 /// Prices on a regular time grid. At grid time g the value is the LAST oracle update with
 /// `updatedAt <= g` (carry-forward), which is exactly what a contract reading the feed at that
 /// moment would see (an un-updated feed stays at its last answer until its next round).

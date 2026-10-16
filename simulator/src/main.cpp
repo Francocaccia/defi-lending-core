@@ -47,8 +47,12 @@ int main(int argc, char** argv) {
     sim::Config cfg = sim::loadConfig(configPath);
     if (threadsOverride != 0) cfg.threads = threadsOverride;
 
-    const auto eth = sim::loadOracleCsv(cfg.ethCsv);
-    const auto usdc = sim::loadOracleCsv(cfg.usdcCsv);
+    auto eth = sim::loadOracleCsv(cfg.ethCsv);
+    auto usdc = sim::loadOracleCsv(cfg.usdcCsv);
+    if (cfg.fromUnix != 0) {
+      eth = sim::fromTime(eth, cfg.fromUnix);
+      usdc = sim::fromTime(usdc, cfg.fromUnix);
+    }
     const sim::Grid grid = sim::buildGrid(eth, usdc, cfg.stepSeconds);
 
     StderrProgress progress;

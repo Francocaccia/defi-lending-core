@@ -75,3 +75,11 @@ TEST(data_committed_history_is_sane_when_present) {
   CHECK(lo > 10000000000ULL);    // never below $100 in this period
   CHECK(hi < 1000000000000ULL);  // never above $10,000
 }
+
+TEST(data_fromTime_keeps_only_updates_at_or_after_the_date) {
+  const std::vector<OraclePoint> pts = {{100, 1}, {200, 2}, {300, 3}};
+  CHECK_EQ(fromTime(pts, 200).size(), static_cast<std::size_t>(2));
+  CHECK_EQ(fromTime(pts, 200).front().answer, static_cast<std::uint64_t>(2));
+  CHECK_EQ(fromTime(pts, 0).size(), static_cast<std::size_t>(3));
+  CHECK_THROWS_ANY(fromTime(pts, 301));
+}
