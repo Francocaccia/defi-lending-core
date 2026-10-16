@@ -51,7 +51,7 @@ model. Quality over feature count. Educational only: never real funds, never mai
   without ffi or the binary).
 - Mutation checks by hand: 18/18 distinct bugs in the market caught by the tests; 11/11 by the
   invariant suite alone; 8/8 `nonReentrant` guards verified by the reentrancy tests.
-- CI (GitHub Actions): fmt check, build, test. Fork tests skip (no secret configured).
+- CI (GitHub Actions): fmt check, build, test, the C++ reference model (GCC + MSVC) and the differential run, and the risk simulator (build, unit tests, smoke run). Fork tests skip (no secret configured).
 
 ## 4. Pending work
 

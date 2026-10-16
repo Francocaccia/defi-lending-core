@@ -69,3 +69,31 @@ jobs:
 
       - name: Test
         run: ctest --test-dir reference-model/build -C Release --output-on-failure
+
+  # Risk simulator (M9): builds against the reference model, unit tests, and one real run of the
+  # historical baseline experiment on the committed Chainlink data (a smoke test of the whole
+  # pipeline; the published numbers are in docs/RISK_SIMULATION.md).
+  simulator:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S simulator -B simulator/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build simulator/build --config Release
+
+      - name: Test
+        run: ctest --test-dir simulator/build -C Release --output-on-failure
+
+      - name: Smoke run (historical baseline, 30-day horizon)
+        shell: bash
+        run: |
+          sed 's/"horizonDays": \[30, 90, 365\]/"horizonDays": [30]/' simulator/configs/historical_baseline.json > simulator/configs/ci_smoke.json
+          if [ -f simulator/build/Release/defi_sim.exe ]; then BIN=simulator/build/Release/defi_sim.exe; else BIN=simulator/build/defi_sim; fi
+          mkdir -p out && "$BIN" run simulator/configs/ci_smoke.json --out out --quiet > /dev/null
+          test -s out/historical_baseline.md && test -s out/historical_baseline.csv
