@@ -305,7 +305,7 @@ commands and raw output in [`docs/GAS_AND_COVERAGE.md`](docs/GAS_AND_COVERAGE.md
 Gas per function (median of the unit/scenario tests, fresh storage; see caveats in the docs): `supply`
 133k, `borrow` 138k, `repay` 64k, `withdrawCollateral` 66k, `liquidate` 132k.
 
-## Limitations (honest list)
+## Limitations
 
 Out of scope for v1, by design:
 - Multiple collateral/borrow assets, cross-margin, isolated markets.
