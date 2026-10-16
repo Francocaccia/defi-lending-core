@@ -5,6 +5,9 @@ from `docs/DESIGN.md` only, returned identical words (or both failed) on every i
 25,000 fuzz comparisons per run (two runs, different seeds), 1,139 shared spec vectors (each run
 twice by the C++ side, with decimal and with hex arguments) and the worked examples of the spec.
 
+Re-run for the final close-out (2026-10-16, fresh clone, `FOUNDRY_PROFILE=diff`, 1000 runs per function, model
+rebuilt from the same clone): 31 passed, 0 failed, 0 skipped in 916 s (30 differential tests plus the vector test).
+
 This is a legitimate outcome, not a placeholder: the report below says exactly what was compared,
 how we know the comparison can fail, what the fuzzer does **not** reach, and the (minor) places
 where the spec was ambiguous.
