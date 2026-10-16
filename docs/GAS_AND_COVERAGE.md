@@ -1,16 +1,17 @@
 # Gas and coverage report
 
 All numbers below were produced by the commands shown, on Foundry 1.8.5, solc 0.8.28
-(optimizer on, 200 runs), `evm_version = cancun`, at the M7 commit that introduced this version of
-the file (after the `MarketMath` refactor).
+(optimizer on, 200 runs), `evm_version = cancun`. They were reproduced on 2026-10-16 from a fresh clone
+of the final repository (default and ci test profiles, coverage, contract size, gas), except where a row
+says otherwise.
 
 ## Test results
 
 | Profile | Command | Result |
 |---|---|---|
 | default, no RPC (what CI sees) | `forge test` | 277 passed, 0 failed, 2 skipped (fork + differential suites) |
-| ci (1000 fuzz runs, invariant depth 128) | `FOUNDRY_PROFILE=ci forge test` | 277 passed, 0 failed, 2 skipped; ~35 s |
-| default, with a mainnet RPC | `MAINNET_RPC_URL=... forge test` | 284 passed, 0 failed, 1 skipped (differential) |
+| ci (1000 fuzz runs, invariant depth 128) | `FOUNDRY_PROFILE=ci forge test` | 277 passed, 0 failed, 2 skipped; 48 s |
+| default, with a mainnet RPC | `MAINNET_RPC_URL=... forge test` | not re-run in the final pass (the fork suite needs a personal RPC URL); it skips when the variable is unset or empty |
 
 Notes: `forge` counts the whole invariant suite as one test (it contains 13 `invariant_*`
 properties). The two skipped items are the `setUp` of the fork contract (skips all 7 fork tests

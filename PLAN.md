@@ -39,9 +39,9 @@ model. Quality over feature count. Educational only: never real funds, never mai
   reentrancy).
 - Static analysis and review docs: `docs/THREAT_MODEL.md`, `docs/SLITHER_TRIAGE.md`,
   `docs/ROUNDING_REVIEW.md`, `docs/GAS_AND_COVERAGE.md`.
-- Measured (details in `docs/GAS_AND_COVERAGE.md`): 277 tests pass without an RPC (2 skipped: the fork
-  and differential suites), 284 with one; 100% line/statement/branch/function coverage of `src/`;
-  Slither 0 findings after documented triage (41 raw).
+- Measured (reproduced 2026-10-16, details in `docs/GAS_AND_COVERAGE.md` and the README metrics table): 277 tests
+  pass without an RPC (2 skipped: the fork and differential suites); 100% line/statement/branch/function coverage
+  of `src/`; Slither 0 findings with the shipped configuration (39 raw without the inline suppressions).
 - Demo: `script/Demo.s.sol` (Anvil + simulation, guarded by `test/script/Demo.t.sol`); optional
   `script/DeploySepolia.s.sol` (live Sepolia feeds, mock tokens, throwaway key, refuses other chains).
 - M7 refactor: accrual / repay / liquidation / bad-debt kernels moved into the pure `MarketMath`;

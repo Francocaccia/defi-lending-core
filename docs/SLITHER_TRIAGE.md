@@ -22,6 +22,13 @@ Re-run after the M7 refactor (accrual / repay / liquidation / bad-debt kernels m
 | First run, default config | **41** (0 High, 10 Medium, 13 Low, 18 Informational) |
 | After documented triage (9 inline suppression blocks covering the 10 Medium findings, 2 detectors excluded in config) | **0** |
 
+Re-count on 2026-10-16 (Slither 0.11.6, fresh clone, a throwaway copy with the inline suppressions removed and
+no configuration file): **39** raw findings, 10 Medium, 11 Low and 18 Informational (9 `incorrect-equality`,
+1 `unused-return`, 11 `timestamp`, 18 `naming-convention`). With the shipped configuration the same code gives
+**0**. The two fewer findings than the first run are both in the `timestamp` detector (11 now, 13 then); the
+likely reason is that the `MarketMath` refactor changed how many places inherit `block.timestamp` taint, but that
+attribution was not re-checked finding by finding. The outcome table below describes the first run (41).
+
 ### Outcome of the 41 raw findings
 
 | Outcome | Count | Which |
