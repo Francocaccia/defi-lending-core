@@ -1,0 +1,61 @@
+{
+  "proxy": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+  "chainId": 1,
+  "fetchedAtUtc": "2026-10-16 14:37",
+  "rpcProviders": [
+    "alchemy.com"
+  ],
+  "rows": 134222,
+  "first": "2020-08-06 23:16",
+  "last": "2026-10-15 22:05",
+  "droppedDuplicatesOrInvalid": 915,
+  "phases": [
+    {
+      "phase": 1,
+      "aggregator": "0xf79d6afbb6da890132f9d7c355e3015f15f3406f",
+      "rounds": 0
+    },
+    {
+      "phase": 2,
+      "aggregator": "0xb103ede8acd6f0c106b7a5772e9d24e34f5ebc2c",
+      "rounds": 0
+    },
+    {
+      "phase": 3,
+      "aggregator": "0x00c7a37b03690fb9f41b5c5af8131735c7275446",
+      "rounds": 26614,
+      "first": "2020-08-06 23:16",
+      "last": "2021-12-23 03:27"
+    },
+    {
+      "phase": 4,
+      "aggregator": "0xd3fcd40153e56110e6eeae13e12530e26c9cb4fd",
+      "rounds": 5056,
+      "first": "2021-03-11 09:23",
+      "last": "2021-05-20 06:40"
+    },
+    {
+      "phase": 5,
+      "aggregator": "0x37bc7498f4ff12c19678ee8fe19d713b87f6a9e6",
+      "rounds": 45034,
+      "first": "2021-05-11 18:41",
+      "last": "2023-05-11 17:55"
+    },
+    {
+      "phase": 6,
+      "aggregator": "0xe62b71cf983019bff55bc83b48601ce8419650cc",
+      "rounds": 23751,
+      "first": "2023-04-05 22:38",
+      "last": "2024-09-30 13:55"
+    },
+    {
+      "phase": 7,
+      "aggregator": "0x7d4e742018fb52e48b08be73d041c18b21de6fb5",
+      "rounds": 34682,
+      "first": "2024-09-18 20:33",
+      "last": "2026-10-15 22:05"
+    }
+  ],
+  "overlapMaxRelativeGapWithin10min": 0.059504667489065445,
+  "csvSha256": "e609e72b521a499e2cd43a6e13bd3ccd678119a1623bab0599d451367bfde301"
+}
