@@ -1,4 +1,5 @@
-Independent cross-check of the C++ engine (tools/crosscheck.py) against the CSVs in this folder.
+Cross-check of the C++ engine by a second implementation (tools/crosscheck.py) against the CSVs in this folder.
+The second implementation is written in the same project from the same specification: it is not an independent audit.
 Produced on the committed data. Each block is the command's real output.
 
 --- Part 1: second implementation, interest accrued EVERY hour (default mode) ---

@@ -10,6 +10,23 @@ model, so every decision uses the same exact integer math that was verified agai
 number in the tables is read from the CSV files in [`simulator/results/`](../simulator/results/); the exact
 commands are at the end. **Read the [limits](#limits-read-before-quoting-a-number) before quoting anything.**
 
+## Headline
+
+**Bad debt depends on how fast liquidators act.** With the default parameters and a position opened at the maximum
+LTV, bad debt was essentially absent from the 2,111 observed 90-day windows **only when the liquidator acted within
+hours**: 0 windows with bad debt when it acted on the next hourly observation, 1 at a 1 h delay, 0 at 6 h.
+With a one-day (24 h) delay, bad debt appeared in 121 windows (5.73%); with a three-day delay, in
+254 (12.03%). Read the two results together: the near-zero is the best case of a
+near-instant liquidator, not a safety claim.
+
+Two cautions apply to every number below:
+
+- **The windows overlap.** 2,111 windows of 90 days start one day apart over about six years, which is roughly
+  24 non-overlapping 90-day periods (and about 6 one-year periods). The window counts are not independent observations.
+- **The sample starts in October 2020.** The March 2020 "Black Thursday" crash and everything earlier are not in
+  it, so the worst known DeFi stress event is **outside this evidence**. "Did not occur in the observed period" is the
+  strongest statement any result here supports.
+
 ## What was simulated
 
 One borrower position on one market (WETH collateral, USDC debt), passive (no top-ups, no repayments), opened at
@@ -22,7 +39,8 @@ as **bad debt** (the loss suppliers absorb; the protocol has no first-loss buffe
 Two kinds of price paths:
 
 - **Historical:** *every* rolling window of the real history, one start per day, no period chosen or excluded
-  (2,171 windows of 30 days, 2,111 of 90 days, 1,836 of 365 days).
+  (2,171 windows of 30 days, 2,111 of 90 days, 1,836 of 365 days: overlapping, equivalent to
+  about 73, 24 and 6 non-overlapping periods).
 - **Bootstrap:** 20,000 synthetic paths per horizon built by resampling the real hourly returns in blocks (mean block
   7 days, ETH and USDC jointly), which probes crashes the sample did not contain. Fixed seed.
 
@@ -42,23 +60,30 @@ hours (45 days). From
 grid, so every config sets `data.from` and every report states the exclusion. The raw download is committed
 unchanged.
 
+**What the sample cannot show.** The usable history begins on 2020-10-06. Black Thursday (12 March 2020, a violent
+one-day ETH crash that stressed DeFi protocols) and any earlier stress are not in the evidence, and neither is
+anything that has not happened yet. The bootstrap recombines the same returns, so it does not fill that gap.
+
 ## How the engine was checked
 
 - 61 unit tests (2,407 checks, MSVC 19.41), including a hand-computed crash scenario, exact-boundary cases, the
   dust filter, determinism across thread counts and a BOM-tolerant config loader.
-- **Independent cross-check** (`simulator/tools/crosscheck.py`, output in
-  [`simulator/results/crosscheck.txt`](../simulator/results/crosscheck.txt)): a second implementation written from
-  `docs/DESIGN.md` section 9 in plain Python (arbitrary-precision integers, no shared code with the C++), re-run on
-  the committed data for 17 combinations of leverage, latency, horizon and protocol variant (30, 90 and 365 days;
-  default, `full-close` and `tight-gap` parameters; the dust experiment). It compares the number of windows that
-  became unhealthy, were liquidated, ended with bad debt, got stuck and got stuck while insolvent, plus the mean
-  bad-debt fraction. **13 of 17 agree exactly.** The other 4 are all 365-day runs: in three of them the counts differ
-  by 1 to 2 windows out of 1,836, and in the fourth the counts agree and only the mean bad-debt fraction differs
-  (0.0008077 against 0.0008037). The cause is the accrual *policy*, not the arithmetic: the Python version accrues interest
-  every hour while the C++ engine accrues only when it inspects the position, and over a year at 4% the hourly
-  compounding is about 0.08% larger (arithmetic: 4% squared, over 2), which flips a window whose health factor is within ~1e-3 of 1. With
-  `--lazy` (the C++ policy, same screening rule, all arithmetic still exact and independent) **7 of 7** 365-day
-  combinations agree exactly. Which accrual policy is "right" depends on how often the market is touched by
+- **Cross-check by a second implementation** (`simulator/tools/crosscheck.py`, output in
+  [`simulator/results/crosscheck.txt`](../simulator/results/crosscheck.txt)). It is a second implementation of the
+  engine, written in the same project from the same specification (`docs/DESIGN.md` section 9), in plain Python with
+  arbitrary-precision integers and no code shared with the C++. **It is not an independent audit.** It can catch
+  arithmetic and bookkeeping slips and differences in modelling policy; it cannot catch a shared misunderstanding,
+  such as an error in the specification or in the liquidation rules that both implementations reproduce, or a wrong
+  modelling assumption. It was re-run on the committed data for 17 combinations of leverage, latency, horizon and
+  protocol variant (30, 90 and 365 days; default, `full-close` and `tight-gap` parameters; the dust experiment),
+  comparing the number of windows that became unhealthy, were liquidated, ended with bad debt, got stuck and got stuck
+  while insolvent, plus the mean bad-debt fraction. **13 of 17 agree exactly.** The other 4 are all 365-day runs: in
+  three of them the counts differ by 1 to 2 windows out of 1,836, and in the fourth the counts agree and only the mean
+  bad-debt fraction differs (0.0008077 against 0.0008037). This found a real policy difference: the Python version
+  accrues interest every hour while the C++ engine accrues only when it inspects the position, and over a year at 4%
+  the hourly compounding is about 0.08% larger (arithmetic: 4% squared, over 2), which flips a window whose health
+  factor is within ~1e-3 of 1. With `--lazy` (the C++ policy, same screening rule, all arithmetic still exact) **7 of 7**
+  365-day combinations agree exactly. Which accrual policy is "right" depends on how often the market is touched by
   others; the effect on any reported count is at most 2 windows in 1,836.
 - Not cross-checked: the bootstrap path generator (it uses floating-point `log`/`exp`, so the exact paths can
   differ in the last bits between compilers and platforms; the reported numbers come from MSVC on Windows). It is
@@ -72,7 +97,7 @@ Rows are how aggressively the borrower leveraged; columns are the liquidator's l
 
 ### 1. Default parameters, real history
 
-**90-day windows (N = 2111):**
+**90-day windows (N = 2111, about 24 non-overlapping periods):**
 
 | start LTV | 0 h | 1 h | 6 h | 24 h | 72 h |
 |---|---|---|---|---|---|
@@ -81,7 +106,7 @@ Rows are how aggressively the borrower leveraged; columns are the liquidator's l
 | 67.5% | 55.8% / 0.00% | 54.5% / 0.14% | 52.3% / 0.00% | 49.6% / 4.55% | 45.4% / 8.24% |
 | 75.0% | 78.9% / 0.00% | 78.2% / 0.05% | 76.7% / 0.00% | 73.9% / 5.73% | 65.9% / 12.03% |
 
-**365-day windows (N = 1836):**
+**365-day windows (N = 1836, about 6 non-overlapping periods):**
 
 | start LTV | 0 h | 1 h | 6 h | 24 h | 72 h |
 |---|---|---|---|---|---|
@@ -90,7 +115,7 @@ Rows are how aggressively the borrower leveraged; columns are the liquidator's l
 | 67.5% | 73.0% / 0.00% | 72.3% / 0.16% | 70.3% / 0.00% | 68.8% / 19.34% | 65.4% / 24.40% |
 | 75.0% | 86.5% / 0.00% | 85.5% / 0.05% | 83.6% / 0.00% | 82.2% / 20.10% | 78.6% / 25.44% |
 
-(30-day windows, N = 2171: see the CSV.) Windows overlap, so the real sample is far smaller than N: the `episodes` column
+(30-day windows, N = 2171, about 73 non-overlapping periods: see the CSV.) Windows overlap, so the real sample is far smaller than N: the `episodes` column
 of the full reports counts distinct crash episodes, and the confidence intervals there assume independence and are
 too narrow.
 
@@ -120,7 +145,7 @@ All rows open at the max-LTV limit. A *valid deployment* is required (the loader
 validation); `tight-gap` narrows max LTV to LT, `aggressive` raises both, `high-bonus` doubles the bonus,
 `full-close` lets one liquidation repay everything.
 
-**90-day windows (N = 2111):**
+**90-day windows (N = 2111, about 24 non-overlapping periods):**
 
 | variant (max LTV / LT / bonus / close factor) | 0 h | 6 h | 24 h | 72 h |
 |---|---|---|---|---|
@@ -131,7 +156,7 @@ validation); `tight-gap` narrows max LTV to LT, `aggressive` raises both, `high-
 | high-bonus (75% / 80% / 10% / 50%) | 78.9% / 0.09% | 76.7% / 2.89% | 73.9% / 14.87% | 65.9% / 24.16% |
 | full-close (75% / 80% / 5% / 100%) | 78.9% / 0.14% | 76.7% / 0.05% | 73.9% / 1.28% | 65.9% / 5.83% |
 
-**365-day windows (N = 1836):**
+**365-day windows (N = 1836, about 6 non-overlapping periods):**
 
 | variant (max LTV / LT / bonus / close factor) | 0 h | 6 h | 24 h | 72 h |
 |---|---|---|---|---|
@@ -164,16 +189,16 @@ was worth more than its collateral, a loss nobody has recognised.
    5.8% and 35.5%. ETH moves enough that a borrower who wants to
    stay out of liquidation has to keep a wide margin or manage the position.
 2. **Bad debt is decided first by how fast liquidators act, then by the margin parameters.** With the default
-   parameters, a liquidator acting on the next observation (0 h) left bad debt in 0 of 2111 90-day
-   windows. At 1 h latency there was 1 window (0.05%): the one starting
+   parameters, a liquidator acting on the next observation (0 h) left bad debt in 0 of 2111 overlapping
+   90-day windows (about 24 independent periods): it did not occur in the observed period, which is the best case. At 1 h latency there was 1 window (0.05%): the one starting
    2021-05-09, whose 90 days contain the 19 May 2021 crash (identified by re-running the windows). At 6 h: 0. At 24 h: 121 windows (5.73%); at 72 h:
    254 (12.03%), with the worst single window losing 19.6% of the
-   position's debt. The protocol is safe against these crashes **if liquidators act within hours**; if they do not, there is
-   nothing behind suppliers (no first-loss buffer, see `docs/THREAT_MODEL.md`).
+   position's debt. In the observed period bad debt did not occur when liquidators acted within hours; when they did not, it did, and
+   there is nothing behind suppliers (no first-loss buffer, see `docs/THREAT_MODEL.md`).
 3. **The safety margin between the liquidation threshold and the point where a liquidation stops being
    profitable matters.** Raising the threshold to 85% (`aggressive`) produced bad debt at 0 h latency in
    14 windows (0.66%) and at 6 h in 157 (7.44%), against
-   0 for the default parameters at 6 h. Doubling the bonus to 10% did the same at 6 h:
+   0 for the default parameters at 6 h (none observed). Doubling the bonus to 10% did the same at 6 h:
    61 windows (2.89%). A larger bonus shrinks the headroom because a liquidation
    stops covering its own debt once the position's LTV exceeds 1/(1+bonus) (95.2% for 5%, 90.9% for 10%); that
    explanation is arithmetic, not something the simulation measured.
@@ -182,7 +207,7 @@ was worth more than its collateral, a loss nobody has recognised.
    repays the whole debt, so no risk is left between liquidations (an explanation, not separately measured). It is not strictly better: it also leaves a few windows with bad debt at 0 h (3 of 2111) where the
    default has none; the simulation does not isolate why.
 5. **A conservative set (65% / 75%) delays but does not remove the problem:** 0 windows with bad
-   debt at 6 h latency, but 105 (4.97%) at 72 h.
+   debt at 6 h latency (none observed), but 105 (4.97%) at 72 h.
 6. **Dust positions are a real, quantified gap.** In 1037 of 2111 90-day windows
    (49.1%) the small position became unhealthy and could not be liquidated at that
    moment, and in 544 (25.8%) it was also insolvent. Under the assumption that nobody liquidates debts below 25 USD,
@@ -197,6 +222,9 @@ was worth more than its collateral, a loss nobody has recognised.
 
 ## Limits (read before quoting a number)
 
+- **The sample starts in October 2020 and the windows overlap.** Black Thursday (March 2020) and earlier stress are
+  outside the evidence; the window counts are about 24 (90 days) and 6 (one year) independent periods, not
+  thousands. "Did not occur in the observed period" never means "cannot occur".
 - **One position, passive borrower, no top-ups or repayments.** It measures the *mechanism*, not a market. A real
   borrower who watches the position is liquidated less often than these tables say.
 - **Fixed utilization (80%).** Rate spikes at high utilization, and the feedback between liquidations and
@@ -213,8 +241,8 @@ was worth more than its collateral, a loss nobody has recognised.
 - **Not simulated:** late recognition of bad debt and the bank-run dynamic among suppliers (threat T32, needs a
   multi-account market model), flash-crash prices, multiple collateral assets (the protocol has one).
 - **Reproducibility:** the numbers here come from MSVC 19.41 on Windows. Historical results use only exact
-  integers plus a conservative floating-point screen, and the cross-check reproduces them with a second
-  implementation. The bootstrap uses `log`/`exp` and may differ in rare paths on another platform.
+  integers plus a conservative floating-point screen, and a second implementation (not an audit, see above)
+  reproduces them. The bootstrap uses `log`/`exp` and may differ in rare paths on another platform.
 
 ## Reproduce
 

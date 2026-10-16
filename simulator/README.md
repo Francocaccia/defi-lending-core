@@ -80,13 +80,17 @@ invalid parameter set is rejected by name instead of simulated. See `configs/`.
 | `parameter_sweep.json` | Six parameter sets on the same history: LTV / threshold gap, bonus, close factor. |
 | `dust_positions.json` | A 40 USD position and a liquidator that ignores debts under 25 USD: how often do positions get stuck, and how often are they also insolvent? (T22) |
 
-## Checking the engine independently
+## Cross-checking the engine
 
-`tools/crosscheck.py` re-runs a historical experiment with a second implementation written from
-`docs/DESIGN.md` section 9 in plain Python (arbitrary-precision integers) and compares the per-combination
+`tools/crosscheck.py` re-runs a historical experiment with a second implementation of the engine, written from
+`docs/DESIGN.md` section 9 in plain Python (arbitrary-precision integers), and compares the per-combination
 counts with the simulator's CSV. It shares no code with the C++ engine or the reference model, inspects every
 hour exactly (the C++ engine skips obviously healthy hours with a floating-point screen) and accrues interest
-every hour (the C++ engine accrues lazily).
+every hour (the C++ engine accrues lazily; `--lazy` adopts the C++ policy).
+
+It is a second implementation written in the same project from the same specification, **not an independent
+audit**: it can catch arithmetic slips and policy differences, but not a misunderstanding that both
+implementations share.
 
 ```bash
 simulator/build/defi_sim run simulator/configs/historical_baseline.json --out out --quiet
@@ -102,6 +106,7 @@ Results and their interpretation: [`../docs/RISK_SIMULATION.md`](../docs/RISK_SI
 - The liquidator is idealised: no slippage, gas or capital limit, except the optional minimum-debt filter.
 - Historical windows overlap heavily; the confidence interval assumes independence and is therefore too narrow.
   The `episodes` column (distinct crash episodes) is the honest sample size.
+- The usable ETH/USD history starts in October 2020, so the March 2020 "Black Thursday" crash is not in the sample.
 - The sample is a few years of one asset's history. "No bad debt observed" is not "bad debt impossible".
 - Late bad-debt recognition and the bank-run dynamic (threat T32) need a multi-account market model and are
   not simulated.

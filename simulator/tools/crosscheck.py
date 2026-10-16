@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Independent cross-check of the C++ simulator's engine.
+"""Cross-check of the C++ simulator's engine by a second implementation.
 
 Re-runs a HISTORICAL experiment with a second implementation written from docs/DESIGN.md section 9 in
 plain Python (arbitrary-precision integers, every operation range-checked to uint256) and compares the
 per-combination counts with the CSV that `defi_sim` produced. It shares no code with the C++ engine or
-with the reference model it links.
+with the reference model it links. It is NOT an independent audit: it is written in the same project from the
+same specification, so it cannot catch a misunderstanding that both implementations share.
 
 Deliberate differences from the C++ engine, so that a match is a real result:
   * no floating-point screen: EVERY hourly observation is inspected with exact integer math;
@@ -13,7 +14,7 @@ Accruing every hour compounds slightly more than accruing once over a long quiet
 the debt after a year at 4%), so on a long horizon a window whose health factor sits within ~1e-3 of 1 can
 flip. That is a difference of accrual POLICY, not of arithmetic, and `--lazy` proves it: it adopts the C++
 engine's policy (accrue only when inspecting, with the same screening rule) while keeping all arithmetic
-exact and independent, and then the counts must agree exactly.
+exact, and then the counts must agree exactly.
 
 Usage:
     python crosscheck.py <config.json> <defi_sim_output.csv> <horizonDays> <fraction:latencyHours> ... [--variant=LABEL] [--lazy]
