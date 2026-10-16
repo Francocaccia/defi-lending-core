@@ -1,0 +1,94 @@
+Independent cross-check of the C++ engine (tools/crosscheck.py) against the CSVs in this folder.
+Produced on the committed data. Each block is the command's real output.
+
+--- Part 1: second implementation, interest accrued EVERY hour (default mode) ---
+== historical_baseline 30d
+fraction 0.5 latency 0 h: MATCH
+   python: {'n': 2171, 'unhealthy': 11, 'liquidated': 11, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 2171, 'unhealthy': 11, 'liquidated': 11, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 0.8 latency 1 h: MATCH
+   python: {'n': 2171, 'unhealthy': 369, 'liquidated': 345, 'badDebt': 1, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 2.6639030262828122e-06}
+   c++   : {'n': 2171, 'unhealthy': 369, 'liquidated': 345, 'badDebt': 1, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 2.66e-06}
+fraction 0.9 latency 6 h: MATCH
+   python: {'n': 2171, 'unhealthy': 735, 'liquidated': 645, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 2171, 'unhealthy': 735, 'liquidated': 645, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 0 h: MATCH
+   python: {'n': 2171, 'unhealthy': 1417, 'liquidated': 1417, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 2171, 'unhealthy': 1417, 'liquidated': 1417, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 24 h: MATCH
+   python: {'n': 2171, 'unhealthy': 1417, 'liquidated': 1206, 'badDebt': 47, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0006723815098117383}
+   c++   : {'n': 2171, 'unhealthy': 1417, 'liquidated': 1206, 'badDebt': 47, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00067237}
+fraction 1.0 latency 72 h: MATCH
+   python: {'n': 2171, 'unhealthy': 1417, 'liquidated': 1012, 'badDebt': 85, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0029195047780655073}
+   c++   : {'n': 2171, 'unhealthy': 1417, 'liquidated': 1012, 'badDebt': 85, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00291949}
+ALL MATCH
+== historical_baseline 90d
+fraction 0.9 latency 0 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1178, 'liquidated': 1178, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 2111, 'unhealthy': 1178, 'liquidated': 1178, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 6 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1666, 'liquidated': 1619, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 2111, 'unhealthy': 1666, 'liquidated': 1619, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 24 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1666, 'liquidated': 1561, 'badDebt': 121, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0007445355700229384}
+   c++   : {'n': 2111, 'unhealthy': 1666, 'liquidated': 1561, 'badDebt': 121, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00074449}
+ALL MATCH
+== historical_baseline 365d
+fraction 0.9 latency 1 h: DIFFERENT
+   python: {'n': 1836, 'unhealthy': 1342, 'liquidated': 1327, 'badDebt': 3, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 6.671382753691535e-06}
+   c++   : {'n': 1836, 'unhealthy': 1341, 'liquidated': 1327, 'badDebt': 3, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 6.67e-06}
+fraction 1.0 latency 0 h: DIFFERENT
+   python: {'n': 1836, 'unhealthy': 1589, 'liquidated': 1589, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 1836, 'unhealthy': 1588, 'liquidated': 1588, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 72 h: DIFFERENT
+   python: {'n': 1836, 'unhealthy': 1589, 'liquidated': 1444, 'badDebt': 469, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.006113707163698562}
+   c++   : {'n': 1836, 'unhealthy': 1588, 'liquidated': 1444, 'badDebt': 467, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00611031}
+SOME DIFFER
+== sweep full-close 90d
+fraction 1.0 latency 6 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1666, 'liquidated': 1619, 'badDebt': 1, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 2.104957309379155e-05}
+   c++   : {'n': 2111, 'unhealthy': 1666, 'liquidated': 1619, 'badDebt': 1, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 2.105e-05}
+fraction 1.0 latency 72 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1666, 'liquidated': 1392, 'badDebt': 123, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.002616191165562625}
+   c++   : {'n': 2111, 'unhealthy': 1666, 'liquidated': 1392, 'badDebt': 123, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00261573}
+ALL MATCH
+== sweep tight-gap 365d
+fraction 1.0 latency 0 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1714, 'liquidated': 1714, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 1836, 'unhealthy': 1714, 'liquidated': 1714, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 24 h: DIFFERENT
+   python: {'n': 1836, 'unhealthy': 1714, 'liquidated': 1614, 'badDebt': 363, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0008076618030649825}
+   c++   : {'n': 1836, 'unhealthy': 1714, 'liquidated': 1614, 'badDebt': 363, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00080374}
+SOME DIFFER
+== dust 90d
+fraction 1.0 latency 0 h: MATCH
+   python: {'n': 2111, 'unhealthy': 1666, 'liquidated': 1666, 'badDebt': 0, 'stuck': 1037, 'stuckUnderwater': 544, 'badMean': 0.0}
+   c++   : {'n': 2111, 'unhealthy': 1666, 'liquidated': 1666, 'badDebt': 0, 'stuck': 1037, 'stuckUnderwater': 544, 'badMean': 0.0}
+ALL MATCH
+
+--- Part 2: same, adopting the C++ engine's accrual policy (--lazy), for the 365-day horizons ---
+== historical_baseline 365d --lazy
+fraction 0.9 latency 1 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1341, 'liquidated': 1327, 'badDebt': 3, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 6.671125649304222e-06}
+   c++   : {'n': 1836, 'unhealthy': 1341, 'liquidated': 1327, 'badDebt': 3, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 6.67e-06}
+fraction 1.0 latency 0 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1588, 'liquidated': 1588, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 1836, 'unhealthy': 1588, 'liquidated': 1588, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 72 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1588, 'liquidated': 1444, 'badDebt': 467, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.006110313723885024}
+   c++   : {'n': 1836, 'unhealthy': 1588, 'liquidated': 1444, 'badDebt': 467, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00611031}
+fraction 0.5 latency 0 h: MATCH
+   python: {'n': 1836, 'unhealthy': 652, 'liquidated': 652, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 1836, 'unhealthy': 652, 'liquidated': 652, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 0.8 latency 24 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1081, 'liquidated': 1038, 'badDebt': 333, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0011643059524402907}
+   c++   : {'n': 1836, 'unhealthy': 1081, 'liquidated': 1038, 'badDebt': 333, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00116431}
+ALL MATCH
+== sweep tight-gap 365d --lazy
+fraction 1.0 latency 0 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1714, 'liquidated': 1714, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+   c++   : {'n': 1836, 'unhealthy': 1714, 'liquidated': 1714, 'badDebt': 0, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0}
+fraction 1.0 latency 24 h: MATCH
+   python: {'n': 1836, 'unhealthy': 1714, 'liquidated': 1614, 'badDebt': 363, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.0008037409986707296}
+   c++   : {'n': 1836, 'unhealthy': 1714, 'liquidated': 1614, 'badDebt': 363, 'stuck': 0, 'stuckUnderwater': 0, 'badMean': 0.00080374}
+ALL MATCH
